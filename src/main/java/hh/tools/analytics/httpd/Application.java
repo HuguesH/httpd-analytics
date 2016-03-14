@@ -39,16 +39,18 @@ public class Application{
    * common
    */
   String                        columnName    =
-      "Jour;Heure;HttpStatus;Duree;Bytes;IP;Method;Host;URI;QueryParams;serveur;service;cleanURI";
+      "Jour;Heure;HttpStatus;Duree;Bytes;IP;Method;Host;URI;QueryParams;serveur;service;cleanURI;folders";
 
 
   public static void main(String[] args) {
     try{
       Application application = new Application();
       application.copyAndUnzipDayLogs();
-      application.aggregateAccessLogHttpd();
-      application.cleanAccessLogHttpd();
-      application.aggregateBackEndLog();
+      application.aggregateDayAccessLogHttpd();
+      application.cleanDayAccessLogHttpd();
+      application.aggregateDayBackEndLog();
+
+      application.aggregateAllAccessLogHttpd();
 
     }catch(IOException e){
       e.printStackTrace();
@@ -57,6 +59,25 @@ public class Application{
 
   }
 
+  private void aggregateAllAccessLogHttpd() throws IOException {
+
+    Collection<File> files = FileUtils.listFiles(targetDir, FileFilterUtils.prefixFileFilter("aggrega-access-clean"), FileFilterUtils.directoryFileFilter());
+
+    List<String> nlines = new ArrayList<String>();
+    for(File file : files){
+      System.out.println(" Find log file  " + file.getAbsolutePath());
+      List<String> lines = FileUtils.readLines(file);
+      for(String line : lines){
+        nlines.add(line);
+      }
+
+    }
+
+    File fSaved = FileUtils.getFile(targetDir,  "aggrega-access-all.csv");
+    FileUtils.writeLines(fSaved, nlines);
+    System.out.println(
+        "Ecriture du fichier aggrege" + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
+  }
 
   Application() throws IOException {
     Properties prop = new Properties();
@@ -70,7 +91,7 @@ public class Application{
     backupDir = new File(prop.getProperty("backup.dir"));
 
     Calendar cal = Calendar.getInstance();
-    cal.add(GregorianCalendar.DAY_OF_MONTH, -4);
+    cal.add(GregorianCalendar.DAY_OF_MONTH, -1);
     dayDirName = dayLogsFormat.format(cal.getTime());
 
   }
@@ -106,7 +127,7 @@ public class Application{
   }
 
 
-  private void aggregateAccessLogHttpd() throws IOException {
+  private void aggregateDayAccessLogHttpd() throws IOException {
 
     File dayWorkDirectory = FileUtils.getFile(targetDir, dayDirName);
 
@@ -148,7 +169,7 @@ public class Application{
 
   }
 
-  private void aggregateBackEndLog() throws IOException {
+  private void aggregateDayBackEndLog() throws IOException {
 
     final File dayWorkDirectory = FileUtils.getFile(targetDir, dayDirName);
 
@@ -289,34 +310,44 @@ public class Application{
    *
    * @throws IOException
    */
-  private void cleanAccessLogHttpd() throws IOException {
+  private void cleanDayAccessLogHttpd() throws IOException {
 
     File dayWorkDirectory = FileUtils.getFile(targetDir, dayDirName);
 
     Collection<File> files = FileUtils.listFiles(dayWorkDirectory, FileFilterUtils.prefixFileFilter("aggrega-access"),
         FileFilterUtils.directoryFileFilter());
     for(File file : files){
-      System.out.println(" Find acces log file  " + file.getAbsolutePath());
-      List<String> lines = FileUtils.readLines(file);
-      List<String> nlines = new ArrayList<String>();
-      nlines.add(columnName.toString().replace(',', ';'));
-      for(String line : lines){
-        if(!line.contains("/health-checks")){
-          String[] cLine = line.split(CSV_SEP);
-          String uri = cLine[8];
-          StringBuilder newLine = new StringBuilder(line).append(cleanUri(uri));
-          nlines.add(newLine.toString());
-        }
-      }
-
-      File fSaved = FileUtils.getFile(dayWorkDirectory,  "aggrega-access-clean-" + dayDirName + ".csv");
-      FileUtils.writeLines(fSaved, nlines);
-      System.out.println( " Ecrite du fichier : "+ fSaved.getAbsolutePath());
+      addColumnCleanURI(file);
       //Nettoyage du fichier temporaire
       file.delete();
     }
   }
 
+  private void addColumnCleanURI(File file) throws IOException {
+
+    System.out.println(" Find acces log file  " + file.getAbsolutePath());
+    List<String> lines = FileUtils.readLines(file);
+    List<String> nlines = new ArrayList<String>();
+    nlines.add(columnName.toString().replace(',', ';'));
+    for(String line : lines){
+      if(!line.contains("/health-checks")){
+        String[] cLine = line.split(CSV_SEP);
+        String uri = cLine[8];
+        StringBuilder newLine = new StringBuilder(line).append(cleanUri(uri));
+        nlines.add(newLine.toString());
+      }
+    }
+
+    File fSaved = FileUtils.getFile(file.getAbsolutePath().replace("aggrega-access", "aggrega-access-clean"));
+    FileUtils.writeLines(fSaved, nlines);
+    System.out.println( " Ecrite du fichier : "+ fSaved.getAbsolutePath());
+  }
+
+  /**
+   * Nettoyage de la chaine de caactere URI pour arriver à une chaine uniqu sans cas fonctionnel.
+   * @param uri
+   * @return
+     */
   private String cleanUri(String uri) {
     String cleanUri = uri;
     // Identifiant IBAN :
