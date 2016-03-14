@@ -211,7 +211,7 @@ public class Application{
     }
     Collections.sort(nlines);
 
-    File fSaved = FileUtils.getFile(dayWorkDirectory,  "newsesame-back-web- " + dayDirName + ".csv");
+    File fSaved = FileUtils.getFile(dayWorkDirectory,  "newsesame-back-web-" + dayDirName + ".csv");
     FileUtils.writeLines(fSaved, nlines);
     System.out.println(
         "Ecriture du fichier aggrege" + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
