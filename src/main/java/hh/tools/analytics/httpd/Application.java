@@ -45,12 +45,17 @@ public class Application{
   public static void main(String[] args) {
     try{
       Application application = new Application();
+      //Deplace et decompress les traces de NewSesame.
       application.copyAndUnzipDayLogs();
+      //Aggrege les access log des deux machines
       application.aggregateDayAccessLogHttpd();
+      //Créer une colonne avec l'URL nettoyée
       application.cleanDayAccessLogHttpd();
-      application.aggregateDayBackEndLog();
+      //Aggrege toutes les LOG Tomcat dans un fichier trié par date
+      //application.aggregateDayBackEndLog();
 
-      application.aggregateAllAccessLogHttpd();
+      //Genere un fichier global pour travailler sur toutes les stats en même temps.
+      //application.aggregateAllAccessLogHttpd();
 
     }catch(IOException e){
       e.printStackTrace();
@@ -61,7 +66,7 @@ public class Application{
 
   private void aggregateAllAccessLogHttpd() throws IOException {
 
-    Collection<File> files = FileUtils.listFiles(targetDir, FileFilterUtils.prefixFileFilter("aggrega-access-clean"), FileFilterUtils.directoryFileFilter());
+    Collection<File> files = FileUtils.listFiles(backupDir, FileFilterUtils.prefixFileFilter("aggrega-access-clean"), FileFilterUtils.directoryFileFilter());
 
     List<String> nlines = new ArrayList<String>();
     for(File file : files){
@@ -73,10 +78,10 @@ public class Application{
 
     }
 
-    File fSaved = FileUtils.getFile(targetDir,  "aggrega-access-all.csv");
+    File fSaved = FileUtils.getFile(backupDir,  "aggrega-access-all.csv");
     FileUtils.writeLines(fSaved, nlines);
     System.out.println(
-        "Ecriture du fichier aggrege" + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
+        "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
   }
 
   Application() throws IOException {
@@ -112,7 +117,7 @@ public class Application{
       for(File file : files){
         int dayPos = file.getAbsolutePath().lastIndexOf(sasLogDirDay.getName());
         File unzipDir = new File(targetDir + "/" + file.getParent().substring(dayPos));
-        System.out.println("unzip file" + file.getName() + " here : " + unzipDir.getAbsolutePath());
+        System.out.println("unzip file " + file.getName() + " here : " + unzipDir.getAbsolutePath());
         unzipDir.mkdirs();
 
         try{
@@ -165,7 +170,7 @@ public class Application{
     File fSaved = FileUtils.getFile(dayWorkDirectory,  "aggrega-access-" + dayDirName + ".csv");
     FileUtils.writeLines(fSaved, nlines);
     System.out.println(
-        "Ecriture du fichier aggrege" + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
+        "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
 
   }
 
@@ -211,10 +216,11 @@ public class Application{
     }
     Collections.sort(nlines);
 
-    File fSaved = FileUtils.getFile(dayWorkDirectory,  "newsesame-back-web-" + dayDirName + ".csv");
+
+    File fSaved = FileUtils.getFile(targetDir,  "newsesame-back-web-" + dayDirName + ".csv");
     FileUtils.writeLines(fSaved, nlines);
     System.out.println(
-        "Ecriture du fichier aggrege" + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
+        "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
 
   }
 
@@ -317,13 +323,13 @@ public class Application{
     Collection<File> files = FileUtils.listFiles(dayWorkDirectory, FileFilterUtils.prefixFileFilter("aggrega-access"),
         FileFilterUtils.directoryFileFilter());
     for(File file : files){
-      addColumnCleanURI(file);
+      cleanURI(file);
       //Nettoyage du fichier temporaire
       file.delete();
     }
   }
 
-  private void addColumnCleanURI(File file) throws IOException {
+  private void cleanURI(File file) throws IOException {
 
     System.out.println(" Find acces log file  " + file.getAbsolutePath());
     List<String> lines = FileUtils.readLines(file);
@@ -338,7 +344,7 @@ public class Application{
       }
     }
 
-    File fSaved = FileUtils.getFile(file.getAbsolutePath().replace("aggrega-access", "aggrega-access-clean"));
+    File fSaved = FileUtils.getFile(backupDir,  "aggrega-access-clean-" + dayDirName + ".csv");
     FileUtils.writeLines(fSaved, nlines);
     System.out.println( " Ecrite du fichier : "+ fSaved.getAbsolutePath());
   }
