@@ -115,7 +115,7 @@ public class Application{
           FileFilterUtils.directoryFileFilter());
 
       for(File file : files){
-        int dayPos = file.getAbsolutePath().lastIndexOf(sasLogDirDay.getName());
+        int dayPos = file.getAbsolutePath().indexOf(sasLogDirDay.getName());
         File unzipDir = new File(targetDir + "/" + file.getParent().substring(dayPos));
         System.out.println("unzip file " + file.getName() + " here : " + unzipDir.getAbsolutePath());
         unzipDir.mkdirs();
