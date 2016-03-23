@@ -44,15 +44,15 @@ public class Application{
 
   public static void main(String[] args) {
     try{
-      Application application = new Application();
+      Application application = new Application(0);
       //Deplace et decompress les traces de NewSesame.
-      application.copyAndUnzipDayLogs();
+      //application.copyAndUnzipDayLogs();
       //Aggrege les access log des deux machines
-      application.aggregateDayAccessLogHttpd();
+     // application.aggregateDayAccessLogHttpd();
       //Créer une colonne avec l'URL nettoyée
-      application.cleanDayAccessLogHttpd();
+      //application.cleanDayAccessLogHttpd();
       //Aggrege toutes les LOG Tomcat dans un fichier trié par date
-      //application.aggregateDayBackEndLog();
+      application.aggregateDayBackEndLog("3");
 
       //Genere un fichier global pour travailler sur toutes les stats en même temps.
       //application.aggregateAllAccessLogHttpd();
@@ -84,7 +84,7 @@ public class Application{
         "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
   }
 
-  Application() throws IOException {
+  Application(final int beforeToday) throws IOException {
     Properties prop = new Properties();
     InputStream inputStream = getClass().getClassLoader().getResourceAsStream("app_home.properties");
     prop.load(inputStream);
@@ -96,7 +96,7 @@ public class Application{
     backupDir = new File(prop.getProperty("backup.dir"));
 
     Calendar cal = Calendar.getInstance();
-    cal.add(GregorianCalendar.DAY_OF_MONTH, -1);
+    cal.add(GregorianCalendar.DAY_OF_MONTH, -beforeToday);
     dayDirName = dayLogsFormat.format(cal.getTime());
 
   }
@@ -174,7 +174,7 @@ public class Application{
 
   }
 
-  private void aggregateDayBackEndLog() throws IOException {
+  private void aggregateDayBackEndLog(String correlationId) throws IOException {
 
     final File dayWorkDirectory = FileUtils.getFile(targetDir, dayDirName);
 
@@ -191,6 +191,11 @@ public class Application{
       for(String line : lines){
         boolean noArchive =
             line.contains("INFO  pacifica.ns.web.filter.LoggingFilter") || line.contains("INFO  p.monitoring.");
+        boolean goodCorrelationId = true;
+        if(StringUtils.isNotEmpty(correlationId)){
+          goodCorrelationId = false;
+        }
+
         Date dateLine = null;
         if(!noArchive && line.length() > 15){
           line = line.replaceAll(";", "!");
@@ -200,6 +205,13 @@ public class Application{
               dateLine = dateFormat.parse(timeLine);
               if(dateLine != null){
                 time = dateLine;
+                if(StringUtils.isNotEmpty(correlationId)){
+                  if(line.contains(correlationId)){
+                    goodCorrelationId = true;
+                  }else {
+                    goodCorrelationId = false;
+                  }
+                }
               }
             }else{
               dateLine = time;
@@ -208,7 +220,9 @@ public class Application{
             dateLine = time;
           }
 
-          nlines.add(new LineLog(dateLine, line, file.getParentFile().getName()));
+          if(goodCorrelationId){
+            nlines.add(new LineLog(dateLine, line, file.getParentFile().getName()));
+          }
         }
 
 
@@ -216,8 +230,13 @@ public class Application{
     }
     Collections.sort(nlines);
 
+    String fileName = "newsesame-back-web-" + dayDirName + ".csv";
 
-    File fSaved = FileUtils.getFile(targetDir,  "newsesame-back-web-" + dayDirName + ".csv");
+    if(StringUtils.isNotEmpty(correlationId)){
+      fileName = fileName.replaceFirst(".csv", "-"+correlationId+".csv");
+    }
+
+    File fSaved = FileUtils.getFile(targetDir,  fileName);
     FileUtils.writeLines(fSaved, nlines);
     System.out.println(
         "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
