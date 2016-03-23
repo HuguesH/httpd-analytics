@@ -4,9 +4,9 @@ import java.io.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
+import hh.tools.file.ZipUtils;
+import org.apache.commons.cli.*;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.FileFilterUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -44,20 +44,49 @@ public class Application{
 
   public static void main(String[] args) {
     try{
-      Application application = new Application(0);
+
+      // create Options object
+      Options options = new Options();
+      options.addOption("h", "help", false, " write help");
+      options.addOption("c", "copySasLog", false, "copy sas log to local directory and unzip all files");
+      options.addOption("a", "access", false, "aggregate httpd access log and add stats columns");
+      options.addOption("t", "tomcat", false, "aggregate tomcat log");
+      options.addOption("s", "stats", false, "aggregate httpd stats all days");
+      //options.addOption(Option.builder().argName("correlationId").hasArg().desc("Correlation id seq").build());
+
+
+      // parse the command line arguments
+      CommandLineParser parser = new DefaultParser();
+      CommandLine line = parser.parse( options, args );
+
+      // validate that block-size has been set
+      if( line.hasOption( "h" ) ) {
+        HelpFormatter formatter = new HelpFormatter();
+        formatter.printHelp( "logs-analytics", options );
+      }
+
+      Application application = new Application(1);
       //Deplace et decompress les traces de NewSesame.
-      //application.copyAndUnzipDayLogs();
-      //Aggrege les access log des deux machines
-     // application.aggregateDayAccessLogHttpd();
-      //Créer une colonne avec l'URL nettoyée
-      //application.cleanDayAccessLogHttpd();
+      if(line.hasOption("c")) {
+        application.copyAndUnzipDayLogs();
+      }
+      //Aggrege les access log des deux machines et ajoute des colonnes facilitant les stats
+      if(line.hasOption("a")) {
+        application.aggregateDayAccessLogHttpd();
+      }
+
       //Aggrege toutes les LOG Tomcat dans un fichier trié par date
-      application.aggregateDayBackEndLog("3");
+      if(line.hasOption("t")) {
+        application.aggregateDayBackEndLog("97896a42-3267-414f-9987-26b9fe25cfd3");
+      }
 
       //Genere un fichier global pour travailler sur toutes les stats en même temps.
-      //application.aggregateAllAccessLogHttpd();
+      if(line.hasOption("s")) {
+        application.aggregateAllAccessLogHttpd();
+      }
 
-    }catch(IOException e){
+    }catch(Exception e){
+      System.out.println(" Exception " + e.getMessage());
       e.printStackTrace();
     }
 
@@ -105,7 +134,7 @@ public class Application{
   private void copyAndUnzipDayLogs() throws IOException {
 
 
-    UnzipUtility unzip = new UnzipUtility();
+   ZipUtils unzip = new ZipUtils();
     File sasLogDirDay = FileUtils.getFile(saslogDir, dayDirName);
 
     for(String machine : machines){
@@ -140,34 +169,43 @@ public class Application{
         FileFilterUtils.directoryFileFilter());
 
     List<String> nlines = new ArrayList<String>();
+    nlines.add(columnName.toString().replace(',', ';'));
 
     for(File file : files){
-      System.out.println(" Find log file  " + file.getAbsolutePath());
+      System.out.println(" Find access file  " + file.getAbsolutePath());
 
       List<String> lines = FileUtils.readLines(file);
       for(String line : lines){
-        // @TODO demander a CAAGIS de remplacer le header COOKIE par le correlationId
-        StringBuilder strBuild = new StringBuilder(line.replaceAll("-;-", ""));
 
-        if(file.getAbsolutePath().contains("vl-c-pxx-33")){
-          strBuild.append("vl-c-pxx-33").append(CSV_SEP);
+        if(!line.contains("/health-checks")) {
+
+          // @TODO demander a CAAGIS de remplacer le header COOKIE par le correlationId
+          // @TODO demander a CAAGIS de mettre le header Location
+          StringBuilder strBuild = new StringBuilder(line.replaceAll("-;-", ""));
+
+          if (file.getAbsolutePath().contains("vl-c-pxx-33")) {
+            strBuild.append("vl-c-pxx-33").append(CSV_SEP);
+          }
+          if (file.getAbsolutePath().contains("vl-c-pxx-34")) {
+            strBuild.append("vl-c-pxx-34").append(CSV_SEP);
+          }
+          if (file.getAbsolutePath().contains("httpd-001")) {
+            strBuild.append("httpd-001").append(CSV_SEP);
+          }
+          if (file.getAbsolutePath().contains("httpd-002")) {
+            strBuild.append("httpd-002").append(CSV_SEP);
+          }
+
+          final String[] cLine = line.split(CSV_SEP);
+          strBuild.append(cleanUri(cLine[8]));
+
+          nlines.add(strBuild.toString());
         }
-        if(file.getAbsolutePath().contains("vl-c-pxx-34")){
-          strBuild.append("vl-c-pxx-34").append(CSV_SEP);
-        }
-        if(file.getAbsolutePath().contains("httpd-001")){
-          strBuild.append("httpd-001").append(CSV_SEP);
-        }
-        if(file.getAbsolutePath().contains("httpd-002")){
-          strBuild.append("httpd-002").append(CSV_SEP);
-        }
-        nlines.add(strBuild.toString());
       }
-
 
     }
 
-    File fSaved = FileUtils.getFile(dayWorkDirectory,  "aggrega-access-" + dayDirName + ".csv");
+    File fSaved = FileUtils.getFile(backupDir,  "aggrega-access-clean-" + dayDirName + ".csv");
     FileUtils.writeLines(fSaved, nlines);
     System.out.println(
         "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
@@ -188,13 +226,13 @@ public class Application{
       System.out.println(" Find newsesame-back-web log file  " + file.getAbsolutePath());
       List<String> lines = FileUtils.readLines(file);
       Date time = null;
+      boolean goodCorrelationId = true;
+      if(StringUtils.isNotEmpty(correlationId)){
+        goodCorrelationId = false;
+      }
       for(String line : lines){
         boolean noArchive =
             line.contains("INFO  pacifica.ns.web.filter.LoggingFilter") || line.contains("INFO  p.monitoring.");
-        boolean goodCorrelationId = true;
-        if(StringUtils.isNotEmpty(correlationId)){
-          goodCorrelationId = false;
-        }
 
         Date dateLine = null;
         if(!noArchive && line.length() > 15){
@@ -244,129 +282,6 @@ public class Application{
   }
 
 
-  /**
-   * Enregistrement de la collection des sessions dans un fichier CSV dont les noms de colonne sont
-   * decrites dans l'enumere ColumnName
-   *
-   * @throws IOException
-   */
-  private void saveResultsInfile() throws IOException {
-    // TODO
-
-  }
-
-  /**
-   * Extrait les informations souhait� pour une recherche dans un fichier de log.
-   *
-   * @throws IOException
-   */
-  private void aggregateTimeWebURI(File dayWorkDirectory, String apiURI) throws IOException, ParseException {
-
-    Collection<File> files = FileUtils.listFiles(dayWorkDirectory,
-        FileFilterUtils.prefixFileFilter("aggrega-newsesame-back-web"), FileFilterUtils.directoryFileFilter());
-
-    List<String> nlines = new ArrayList<String>();
-    nlines.add("URI;thread;startTime;endTime;delta;");
-    Map<String, String> mUri = new HashMap<String, String>();
-
-    for(File file : files){
-      System.out.println(" Find newsesame-back-web log file  " + file.getAbsolutePath());
-      List<String> lines = FileUtils.readLines(file);
-
-      for(String line : lines){
-        // Analyse the line
-        if(line.contains(apiURI)){
-          // Start
-          if(line.contains(apiURI + "  (")){
-            String startTime = line.substring(0, 13);
-            String thread = line.substring(14, line.indexOf("] INFO"));
-            if(mUri.get(thread) != null){
-              System.out.println(" WARN : thread is use !!!!!");
-            }else{
-              mUri.put(thread, startTime);
-            }
-          }
-          // End
-          if(line.contains(apiURI + " :")){
-            String endTime = line.substring(0, 13);
-            String thread = line.substring(14, line.indexOf("] INFO"));
-            String startTime = mUri.remove(thread);
-            if(startTime == null){
-              System.out.println(" WARN : thread not initialise ");
-            }else{
-              StringBuilder csvLine = new StringBuilder(apiURI);
-
-              Date startD = dateFormat.parse(startTime);
-              Date endD = dateFormat.parse(endTime);
-
-              long diff = endD.getTime() - startD.getTime();
-
-              csvLine
-                  .append(CSV_SEP)
-                  .append(thread)
-                  .append(CSV_SEP)
-                  .append(startTime)
-                  .append(CSV_SEP)
-                  .append(endTime)
-                  .append(CSV_SEP)
-                  .append(diff)
-                  .append(CSV_SEP);
-              nlines.add(csvLine.toString());
-            }
-
-          }
-        }
-
-      }
-
-    }
-
-    File fSaved = FileUtils.getFile(dayWorkDirectory, apiURI.replaceAll("/", "")+ "-" +dayDirName + ".csv");
-    System.out.println("Saved in file : " + fSaved.getAbsolutePath());
-    FileUtils.writeLines(fSaved, nlines);
-    System.out.println(
-        "Ecriture du fichier : " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
-
-  }
-
-
-  /**
-   * Extrait les informations souhait� pour une recherche dans un fichier de log.
-   *
-   * @throws IOException
-   */
-  private void cleanDayAccessLogHttpd() throws IOException {
-
-    File dayWorkDirectory = FileUtils.getFile(targetDir, dayDirName);
-
-    Collection<File> files = FileUtils.listFiles(dayWorkDirectory, FileFilterUtils.prefixFileFilter("aggrega-access"),
-        FileFilterUtils.directoryFileFilter());
-    for(File file : files){
-      cleanURI(file);
-      //Nettoyage du fichier temporaire
-      file.delete();
-    }
-  }
-
-  private void cleanURI(File file) throws IOException {
-
-    System.out.println(" Find acces log file  " + file.getAbsolutePath());
-    List<String> lines = FileUtils.readLines(file);
-    List<String> nlines = new ArrayList<String>();
-    nlines.add(columnName.toString().replace(',', ';'));
-    for(String line : lines){
-      if(!line.contains("/health-checks")){
-        String[] cLine = line.split(CSV_SEP);
-        String uri = cLine[8];
-        StringBuilder newLine = new StringBuilder(line).append(cleanUri(uri));
-        nlines.add(newLine.toString());
-      }
-    }
-
-    File fSaved = FileUtils.getFile(backupDir,  "aggrega-access-clean-" + dayDirName + ".csv");
-    FileUtils.writeLines(fSaved, nlines);
-    System.out.println( " Ecrite du fichier : "+ fSaved.getAbsolutePath());
-  }
 
   /**
    * Nettoyage de la chaine de caactere URI pour arriver à une chaine uniqu sans cas fonctionnel.
@@ -431,61 +346,6 @@ public class Application{
     }
   }
 
-  public class UnzipUtility{
 
-    /**
-     * Size of the buffer to read/write data
-     */
-    private static final int BUFFER_SIZE = 4096;
-
-    /**
-     * Extracts a zip file specified by the zipFilePath to a directory specified by destDirectory
-     * (will be created if does not exists)
-     *
-     * @param zipFilePath
-     * @param destDirectory
-     * @throws IOException
-     */
-    public void unzip(String zipFilePath, String destDirectory) throws IOException {
-      File destDir = new File(destDirectory);
-      if(!destDir.exists()){
-        destDir.mkdir();
-      }
-      ZipInputStream zipIn = new ZipInputStream(new FileInputStream(zipFilePath));
-      ZipEntry entry = zipIn.getNextEntry();
-      // iterates over entries in the zip file
-      while(entry != null){
-        String filePath = destDirectory + File.separator + entry.getName();
-        if(!entry.isDirectory()){
-          // if the entry is a file, extracts it
-          extractFile(zipIn, filePath);
-        }else{
-          // if the entry is a directory, make the directory
-          File dir = new File(filePath);
-          dir.mkdir();
-        }
-        zipIn.closeEntry();
-        entry = zipIn.getNextEntry();
-      }
-      zipIn.close();
-    }
-
-    /**
-     * Extracts a zip entry (file entry)
-     *
-     * @param zipIn
-     * @param filePath
-     * @throws IOException
-     */
-    private void extractFile(ZipInputStream zipIn, String filePath) throws IOException {
-      BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(filePath));
-      byte[] bytesIn = new byte[BUFFER_SIZE];
-      int read = 0;
-      while((read = zipIn.read(bytesIn)) != -1){
-        bos.write(bytesIn, 0, read);
-      }
-      bos.close();
-    }
-  }
 
 }
