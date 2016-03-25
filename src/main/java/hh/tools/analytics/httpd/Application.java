@@ -39,7 +39,7 @@ public class Application{
    * common
    */
   String                        columnName    =
-      "Jour;Heure;HttpStatus;Duree;Bytes;IP;Method;Host;URI;QueryParams;serveur;service;cleanURI;folders";
+      "Jour;Heure;HttpStatus;Duree;Bytes;IP;Method;Host;URI;QueryParams;serveur;service;cleanURI;HH";
 
 
   public static void main(String[] args) {
@@ -65,7 +65,7 @@ public class Application{
         formatter.printHelp( "logs-analytics", options );
       }
 
-      Application application = new Application(1);
+      Application application = new Application(0);
       //Deplace et decompress les traces de NewSesame.
       if(line.hasOption("c")) {
         application.copyAndUnzipDayLogs();
@@ -77,7 +77,7 @@ public class Application{
 
       //Aggrege toutes les LOG Tomcat dans un fichier trié par date
       if(line.hasOption("t")) {
-        application.aggregateDayBackEndLog("97896a42-3267-414f-9987-26b9fe25cfd3");
+        application.aggregateDayBackEndLog("] ERROR ");
       }
 
       //Genere un fichier global pour travailler sur toutes les stats en même temps.
@@ -90,6 +90,25 @@ public class Application{
       e.printStackTrace();
     }
 
+
+  }
+
+  public Application(final int beforeToday) throws IOException {
+    Properties prop = new Properties();
+    InputStream inputStream = getClass().getClassLoader().getResourceAsStream("app_home.properties");
+    prop.load(inputStream);
+
+    saslogDir = new File(prop.getProperty("saslog.dir"));
+    System.out.println("SASLOG  DIR : " + saslogDir);
+    targetDir = new File(prop.getProperty("target.dir"));
+    System.out.println("TARGET  DIR : " + targetDir);
+    backupDir = new File(prop.getProperty("backup.dir"));
+    System.out.println("BACKUP  DIR : " + backupDir);
+
+    Calendar cal = Calendar.getInstance();
+    cal.add(GregorianCalendar.DAY_OF_MONTH, -beforeToday);
+    dayDirName = dayLogsFormat.format(cal.getTime());
+    System.out.println(" Work on day : " + dayDirName);
 
   }
 
@@ -113,22 +132,7 @@ public class Application{
         "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
   }
 
-  Application(final int beforeToday) throws IOException {
-    Properties prop = new Properties();
-    InputStream inputStream = getClass().getClassLoader().getResourceAsStream("app_home.properties");
-    prop.load(inputStream);
 
-    saslogDir = new File(prop.getProperty("saslog.dir"));
-    System.out.println("SASLOG  DIR : " + saslogDir);
-
-    targetDir = new File(prop.getProperty("target.dir"));
-    backupDir = new File(prop.getProperty("backup.dir"));
-
-    Calendar cal = Calendar.getInstance();
-    cal.add(GregorianCalendar.DAY_OF_MONTH, -beforeToday);
-    dayDirName = dayLogsFormat.format(cal.getTime());
-
-  }
 
 
   private void copyAndUnzipDayLogs() throws IOException {
@@ -197,7 +201,10 @@ public class Application{
           }
 
           final String[] cLine = line.split(CSV_SEP);
-          strBuild.append(cleanUri(cLine[8]));
+          //Ajout de l'URI Clean permettant de regrouper d'exclure les versions et les numéro fonctionnels.
+          strBuild.append(cleanUri(cLine[8])).append(CSV_SEP);
+          //Ajout de l'Heure pour contrler le flux dans la suite de la journée.
+          strBuild.append(cLine[1].substring(0,2)).append(CSV_SEP);
 
           nlines.add(strBuild.toString());
         }
@@ -232,7 +239,7 @@ public class Application{
       }
       for(String line : lines){
         boolean noArchive =
-            line.contains("INFO  pacifica.ns.web.filter.LoggingFilter") || line.contains("INFO  p.monitoring.");
+            line.contains("INFO  pacifica.ns.web.filter.LoggingFilter") || line.contains("INFO  p.monitoring.") || line.contains("ListeFamille Node is empty") || line.contains("Dossier Node is empty");
 
         Date dateLine = null;
         if(!noArchive && line.length() > 15){
@@ -271,7 +278,7 @@ public class Application{
     String fileName = "newsesame-back-web-" + dayDirName + ".csv";
 
     if(StringUtils.isNotEmpty(correlationId)){
-      fileName = fileName.replaceFirst(".csv", "-"+correlationId+".csv");
+      fileName = fileName.replaceFirst(".csv", "-"+correlationId.replaceAll(" ", "-")+".csv");
     }
 
     File fSaved = FileUtils.getFile(targetDir,  fileName);
