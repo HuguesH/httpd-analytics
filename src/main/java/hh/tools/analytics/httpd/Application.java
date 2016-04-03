@@ -11,6 +11,8 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.FileFilterUtils;
 import org.apache.commons.lang3.StringUtils;
 
+import javax.sound.sampled.Line;
+
 /**
  * Created by Hugues on 07/03/2016.
  */
@@ -52,6 +54,7 @@ public class Application {
             options.addOption("a", "access", false, "aggregate httpd access log and add stats columns");
             options.addOption("t", "tomcat", false, "aggregate tomcat log");
             options.addOption("s", "stats", false, "aggregate httpd stats all days");
+            options.addOption("d", "strartDownload", false, "calcul delta between strating a fonction and complete tthe page in Ajax");
             //options.addOption(Option.builder().argName("correlationId").hasArg().desc("Correlation id seq").build());
 
 
@@ -77,7 +80,12 @@ public class Application {
 
             //Aggrege toutes les LOG Tomcat dans un fichier trié par date
             if (line.hasOption("t")) {
-                application.aggregateDayBackEndLog(new String[]{"AIGUILLAGE # Formatted URL : /frontend/dossier-client/index-cl.html#/home  (AiguilleurService.java:106)", "recupèration de la liste des objets d'assurance ended.  (DossierClientRestController.java:89)"});
+                application.aggregateDayBackEndLog(new String[]{"f85afe24-57a3-4841-bc71-90fb9072a1a5"});
+            }
+
+            //Aggrege toutes les LOG Tomcat dans un fichier trié par date
+            if (line.hasOption("d")) {
+                application.deltaDayBackEndLog(new String[]{"AIGUILLAGE # Formatted URL : /frontend/dossier-client/index-cl.html#/home", "recupèration de la liste des notifications .  (DossierClientRestController.java:140)"});
             }
 
             //Genere un fichier global pour travailler sur toutes les stats en même temps.
@@ -100,7 +108,6 @@ public class Application {
         cal.add(GregorianCalendar.DAY_OF_MONTH, -beforeToday);
         this.dayDirName = dayLogsFormat.format(cal.getTime());
         System.out.println(" Work on day : " + dayDirName);
-
 
 
     }
@@ -256,56 +263,149 @@ public class Application {
 
         List<LineLog> nlines = new ArrayList<LineLog>();
 
-
-
-
         for (File file : files) {
-            System.out.println(" Find newsesame-back-web log file  " + file.getAbsolutePath());
-            List<String> lines = FileUtils.readLines(file);
-
-            Date preTime = null;
-            boolean goodLine = true;
-
-            if (extractTexte != null && extractTexte.length > 0) {
-                goodLine = false;
-            }
-            for (String line : lines) {
-                Date dateLine = matchDateLine(line);
-                if (dateLine != null) {
-                    preTime = dateLine;
-                    if (extractTexte != null && extractTexte.length > 0) {
-                        goodLine = false;
-                        for (String extract : extractTexte ){
-                            if(line.contains(extract)){
-                                goodLine = true;
-                            }
-                        }
-                    }
-                } else {
-                    dateLine = preTime;
-                }
-                if (goodLine) {
-                    line = line.replaceAll(";", "|");
-                    nlines.add(new LineLog(dateLine, line, file.getParentFile().getName()));
-                }
-            }
+            filterTomcatLogLines(extractTexte, nlines, file);
         }
 
+        // Tri par date
         Collections.sort(nlines);
 
+        //Enregistrement du resultat :
         String fileName = "newsesame-back-web-" + dayDirName + ".csv";
-
-        if (StringUtils.isNotEmpty(extractTexte[0]))
-
-        {
-            fileName = fileName.replaceFirst(".csv", "-" + extractTexte[0].replaceAll(" ", "-").substring(0,4) + ".csv");
+        if (StringUtils.isNotEmpty(extractTexte[0])) {
+            fileName = fileName.replaceFirst(".csv", "-filter-" + extractTexte[0].replaceAll(" ", "-").replaceAll(":", "").replaceAll("/","_").substring(0,13) + ".csv");
         }
-
         File fSaved = FileUtils.getFile(targetDir, fileName);
         FileUtils.writeLines(fSaved, nlines);
         System.out.println(
                 "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
 
+    }
+
+
+    private void deltaDayBackEndLog(String[] deltaTexte) throws IOException {
+
+        final File dayWorkDirectory = FileUtils.getFile(targetDir, dayDirName);
+
+        Collection<File> files = FileUtils.listFiles(dayWorkDirectory,
+                FileFilterUtils.prefixFileFilter("newsesame-back-web"), FileFilterUtils.directoryFileFilter());
+
+        List<LineLog> nlines = new ArrayList<LineLog>();
+
+        for (File file : files) {
+            filterTomcatLogLines(deltaTexte, nlines, file);
+        }
+
+        // Tri par date
+        Collections.sort(nlines);
+
+        Map<String, DeltaLine> nDelta = new HashMap<String, DeltaLine>();
+
+        for (LineLog logLine : nlines) {
+
+            String[] logDatas = logLine._line.split(" - ");
+            if (logDatas.length < 4) {
+                System.out.println(" Bad starting pattern, not a good logLine");
+            }
+            // Concatenation du User et du correlationId
+            String key = logDatas[1] + ";" + logDatas[2];
+
+            DeltaLine delta = nDelta.get(key);
+
+            //Si la ligne contient le texte de depart
+            if (logLine._line.contains(deltaTexte[0])) {
+                if (delta != null) {
+                    System.out.println("!!!  Strange 2 start for your start line on this user and correlationId, change the key ??????? " + key);
+                }
+                nDelta.put(key, new DeltaLine(logLine));
+            }
+        }
+
+        for (LineLog logLine : nlines) {
+
+            String[] logDatas = logLine._line.split(" - ");
+            if (logDatas.length < 4) {
+                System.out.println(" Bad starting pattern, not a good logLine");
+            }
+            // Concatenation du User et du correlationId
+            String key = logDatas[1] + ";" + logDatas[2];
+
+            DeltaLine delta = nDelta.get(key);
+
+            if (logLine._line.contains(deltaTexte[1])) {
+                if (delta == null) {
+                    System.out.println("!!!  Strange no start for your  end line on this user and correlationId, not a dossier client starting ?? " + key);
+                }else {
+                    delta.putEndLogLine(logLine);
+                }
+            }
+        }
+
+        List<String> resultLines = new ArrayList<String>();
+        resultLines.add("user;correlationId;startTime;downloadTime");
+        for (String key : nDelta.keySet()) {
+            DeltaLine deltaLine = nDelta.get(key);
+            StringBuilder lineBuilder = new StringBuilder();
+            if (deltaLine.nextSessionEndLineLog.isEmpty()) {
+                System.out.println("Aucun element de fin pour la clés d'entrée : " + key);
+                System.out.println("Aucun element de fin pour la ligne d'entrée : " + deltaLine._startLineLog._line);
+            } else {
+                Collections.sort(deltaLine.nextSessionEndLineLog);
+                LineLog endLIne = deltaLine.nextSessionEndLineLog.get(0);
+                if (endLIne == null) {
+                    System.out.println("Aucun element de fin pour la clés d'entrée : " + key);
+                } else {
+
+                    Long diffBetween = endLIne._dateTime.getTime() - deltaLine._startLineLog._dateTime.getTime();
+                    lineBuilder.append(key).append(";").append(dateFormat.format(deltaLine._startLineLog._dateTime.getTime())).append(";").append(String.valueOf(diffBetween));
+                    resultLines.add(lineBuilder.toString());
+                }
+            }
+
+        }
+
+        //Enregistrement du resultat :
+        String fileName = "newsesame-back-web-" + dayDirName + ".csv";
+        if (StringUtils.isNotEmpty(deltaTexte[0])) {
+            fileName = fileName.replaceFirst(".csv", "-delta-" + deltaTexte[0].replaceAll(" ", "-").replaceAll(":", "").replaceAll("/","_") + ".csv");
+        }
+        File fSaved = FileUtils.getFile(targetDir, fileName);
+        FileUtils.writeLines(fSaved, resultLines);
+        System.out.println(
+                "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
+
+    }
+
+
+    private void filterTomcatLogLines(String[] extractTexte, List<LineLog> nlines, File file) throws IOException {
+        System.out.println(" Find newsesame-back-web log file  " + file.getAbsolutePath());
+        List<String> lines = FileUtils.readLines(file);
+
+        Date preTime = null;
+        boolean goodLine = true;
+
+        if (extractTexte != null && extractTexte.length > 0) {
+            goodLine = false;
+        }
+        for (String line : lines) {
+            Date dateLine = matchDateLine(line);
+            if (dateLine != null) {
+                preTime = dateLine;
+                if (extractTexte != null && extractTexte.length > 0) {
+                    goodLine = false;
+                    for (String extract : extractTexte) {
+                        if (line.contains(extract)) {
+                            goodLine = true;
+                        }
+                    }
+                }
+            } else {
+                dateLine = preTime;
+            }
+            if (goodLine) {
+                nlines.add(new LineLog(dateLine, line, file.getParentFile().getName()));
+            }
+        }
     }
 
 
@@ -334,11 +434,7 @@ public class Application {
             cleanUri = cleanUri.replaceAll("[/][A-Z]{2}[/]", "/{CODE}/");
             cleanUri = cleanUri.replaceAll("[/]\\d{2}[/]", "/{CODE}/");
         }
-
-
         return cleanUri;
-
-
     }
 
     private String cleanUriAfterSequence(String uri, String seq) {
@@ -350,6 +446,9 @@ public class Application {
         return cleanUri;
     }
 
+    /**
+     * Object representant une ligne de log pour permettre le tri par date
+     */
     private class LineLog implements Comparable<LineLog> {
 
         LineLog(Date dateTime, String line, String folder) {
@@ -364,8 +463,11 @@ public class Application {
         String _line;
         String _folder;
 
+        /**
+         * @return string CSV with ';' separator
+         */
         public String toString() {
-            return _line + ";" + dateFormat.format(_dateTime) + ";" + _folder;
+            return _line.replaceAll(";", "|") + ";" + dateFormat.format(_dateTime) + ";" + _folder;
         }
 
         public int compareTo(LineLog o) {
@@ -373,21 +475,24 @@ public class Application {
         }
     }
 
-    private class DeltaLine implements Comparable<DeltaLine>{
+    /**
+     *
+     */
+    private class DeltaLine {
 
-        DeltaLine (Date startTime, String startline){
-            _startTime = startTime;
-            _startLine = startline;
-        }
-        public int compareTo(DeltaLine o) {
-            return _startTime.compareTo(o._startTime);
+        DeltaLine(LineLog startLineLog) {
+            _startLineLog = startLineLog;
         }
 
-        Date _startTime;
-        String _startLine;
+        public void putEndLogLine(LineLog endLineLog) {
+            nextSessionEndLineLog.add(endLineLog);
+        }
+
+        LineLog _startLineLog;
+
+        List<LineLog> nextSessionEndLineLog = new ArrayList<LineLog>();
 
     }
-
 
 
 }
