@@ -52,10 +52,11 @@ public class Application {
             options.addOption("h", "help", false, " write help");
             options.addOption("c", "copySasLog", false, "copy sas log to local directory and unzip all files");
             options.addOption("a", "access", false, "aggregate httpd access log and add stats columns");
-            options.addOption("t", "tomcat", false, "aggregate tomcat log");
+            options.addOption(Option.builder("t").longOpt("tomcat").hasArg().argName("filter").desc("aggregate tomcat log").build());
+            options.getOption("t").hasArg();
             options.addOption("s", "stats", false, "aggregate httpd stats all days");
             options.addOption("d", "strartDownload", false, "calcul delta between strating a fonction and complete tthe page in Ajax");
-            //options.addOption(Option.builder().argName("correlationId").hasArg().desc("Correlation id seq").build());
+
 
 
             // parse the command line arguments
@@ -68,7 +69,19 @@ public class Application {
                 formatter.printHelp("logs-analytics", options);
             }
 
-            Application application = new Application("20160323");
+            Application application;
+            if(line.getArgs() != null && line.getArgs().length == 1){
+                if(line.getArgs()[0].length() == 1){
+                    // SI l'argument principal est de taille on considere que c'est le nombre de jour d'ecart avec le lancement. 0 : Aujourd'hui
+                    application = new Application(Integer.parseInt(line.getArgs()[0]));
+                }else {
+                    //SINON c'est le nom du dossier dans la SAS LOG correspondant au jour sur lequel on souhaite travailler.
+                    application = new Application(line.getArgs()[0]);
+                }
+            }else{
+                // Si aucun argument global on travail sur J - 1 au niveau du SAS LOG
+                application = new Application(1);
+            }
             //Deplace et decompress les traces de NewSesame.
             if (line.hasOption("c")) {
                 application.copyAndUnzipDayLogs();
@@ -80,7 +93,8 @@ public class Application {
 
             //Aggrege toutes les LOG Tomcat dans un fichier trié par date
             if (line.hasOption("t")) {
-                application.aggregateDayBackEndLog(new String[]{"f85afe24-57a3-4841-bc71-90fb9072a1a5"});
+                String[] tomcatArgs = line.getOptionValues("t");
+                application.aggregateDayBackEndLog(tomcatArgs);
             }
 
             //Aggrege toutes les LOG Tomcat dans un fichier trié par date
@@ -273,7 +287,7 @@ public class Application {
         //Enregistrement du resultat :
         String fileName = "newsesame-back-web-" + dayDirName + ".csv";
         if (StringUtils.isNotEmpty(extractTexte[0])) {
-            fileName = fileName.replaceFirst(".csv", "-filter-" + extractTexte[0].replaceAll(" ", "-").replaceAll(":", "").replaceAll("/","_").substring(0,13) + ".csv");
+            fileName = fileName.replaceFirst(".csv", "-filter-" + extractTexte[0].replaceAll(" ", "-").replaceAll(":", "").replaceAll("/","_") + ".csv");
         }
         File fSaved = FileUtils.getFile(targetDir, fileName);
         FileUtils.writeLines(fSaved, nlines);
