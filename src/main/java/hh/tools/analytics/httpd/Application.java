@@ -286,7 +286,7 @@ public class Application {
 
         //Enregistrement du resultat :
         String fileName = "newsesame-back-web-" + dayDirName + ".csv";
-        if (StringUtils.isNotEmpty(extractTexte[0])) {
+        if (extractTexte != null && extractTexte.length > 0) {
             fileName = fileName.replaceFirst(".csv", "-filter-" + extractTexte[0].replaceAll(" ", "-").replaceAll(":", "").replaceAll("/","_") + ".csv");
         }
         File fSaved = FileUtils.getFile(targetDir, fileName);
