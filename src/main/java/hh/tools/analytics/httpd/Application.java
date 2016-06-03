@@ -1,17 +1,17 @@
 package hh.tools.analytics.httpd;
 
-import java.io.*;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.*;
-
 import hh.tools.file.ZipUtils;
 import org.apache.commons.cli.*;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.FileFilterUtils;
 import org.apache.commons.lang3.StringUtils;
 
-import javax.sound.sampled.Line;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.*;
 
 /**
  * Created by Hugues on 07/03/2016.
@@ -21,7 +21,9 @@ public class Application {
 
     static final String CSV_SEP = ";";
 
-    static final String[] machines = new String[]{"vl-c-pxx-33", "vl-c-pxx-34"};
+    static final String[] machinesProduction = new String[]{"vl-c-pxx-33", "vl-c-pxx-34"};
+
+    static final String[] machinesFormation = new String[]{"vl-c-fxx-33", "vl-c-fxx-34"};
 
     static final SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm:ss.SSS");
 
@@ -41,7 +43,7 @@ public class Application {
      * common
      */
     String columnName =
-            "Jour;Heure;HttpStatus;Duree;Bytes;IP;Method;Host;URI;QueryParams;serveur;service;cleanURI;HH";
+        "Jour;Heure;HttpStatus;Duree;Bytes;IP;Method;Host;URI;QueryParams;serveur;service;cleanURI;HH";
 
 
     public static void main(String[] args) {
@@ -52,11 +54,14 @@ public class Application {
             options.addOption("h", "help", false, " write help");
             options.addOption("c", "copySasLog", false, "copy sas log to local directory and unzip all files");
             options.addOption("a", "access", false, "aggregate httpd access log and add stats columns");
+            options.addOption("w", "backweb", false, "aggregate backweb log ");
             options.addOption(Option.builder("t").longOpt("tomcat").hasArg().argName("filter").desc("aggregate tomcat log").build());
             options.getOption("t").hasArg();
+            options.addOption("e", "backsea", false, "aggregate back sea log ");
+
             options.addOption("s", "stats", false, "aggregate httpd stats all days");
             options.addOption("d", "strartDownload", false, "calcul delta between strating a fonction and complete tthe page in Ajax");
-
+            options.addOption("p","properties", false, "filePath du fichier de properties dans le classpath");
 
 
             // parse the command line arguments
@@ -69,10 +74,16 @@ public class Application {
                 formatter.printHelp("logs-analytics", options);
             }
 
+            if (line.hasOption("p")) {
+
+            }
+
+
+
             Application application;
             if(line.getArgs() != null && line.getArgs().length == 1){
                 if(line.getArgs()[0].length() == 1){
-                    // SI l'argument principal est de taille on considere que c'est le nombre de jour d'ecart avec le lancement. 0 : Aujourd'hui
+                    // SI l'argument principal est de taille 1 on considere que c'est le nombre de jour d'ecart avec le lancement. 0 : Aujourd'hui
                     application = new Application(Integer.parseInt(line.getArgs()[0]));
                 }else {
                     //SINON c'est le nom du dossier dans la SAS LOG correspondant au jour sur lequel on souhaite travailler.
@@ -89,6 +100,17 @@ public class Application {
             //Aggrege les access log des deux machines et ajoute des colonnes facilitant les stats
             if (line.hasOption("a")) {
                 application.aggregateDayAccessLogHttpd();
+            }
+
+            //Aggrege toutes les LOG Tomcat dans un fichier trié par date
+            if (line.hasOption("w")) {
+
+                application.aggregateDayBackEndLog(null);
+            }
+
+            //Aggrege les traces SEA
+            if(line.hasOption("e")){
+                application.aggregateDayBackSeaLog(null);
             }
 
             //Aggrege toutes les LOG Tomcat dans un fichier trié par date
@@ -117,7 +139,7 @@ public class Application {
 
     public Application(final int beforeToday) throws IOException {
 
-        initProperties();
+        initProperties("app_home.properties");
         Calendar cal = Calendar.getInstance();
         cal.add(GregorianCalendar.DAY_OF_MONTH, -beforeToday);
         this.dayDirName = dayLogsFormat.format(cal.getTime());
@@ -127,15 +149,15 @@ public class Application {
     }
 
     public Application(final String useDayDirName) throws IOException {
-        initProperties();
+        initProperties("app_home.properties");
         this.dayDirName = useDayDirName;
         System.out.println(" Work on day : " + dayDirName);
 
     }
 
-    private void initProperties() throws IOException {
+    private void initProperties(String propertiesFileName) throws IOException {
         Properties prop = new Properties();
-        InputStream inputStream = getClass().getClassLoader().getResourceAsStream("app_home.properties");
+        InputStream inputStream = getClass().getClassLoader().getResourceAsStream(propertiesFileName);
         prop.load(inputStream);
 
         this.saslogDir = new File(prop.getProperty("saslog.dir"));
@@ -163,7 +185,7 @@ public class Application {
         File fSaved = FileUtils.getFile(backupDir, "aggrega-access-all.csv");
         FileUtils.writeLines(fSaved, nlines);
         System.out.println(
-                "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
+            "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
     }
 
 
@@ -173,11 +195,11 @@ public class Application {
         ZipUtils unzip = new ZipUtils();
         File sasLogDirDay = FileUtils.getFile(saslogDir, dayDirName);
 
-        for (String machine : machines) {
+        for (String machine : machinesProduction) {
             File machioneDir = FileUtils.getFile(sasLogDirDay, machine);
             System.out.println(" Read logs on " + machioneDir.getAbsolutePath());
             Collection<File> files = FileUtils.listFiles(machioneDir, FileFilterUtils.suffixFileFilter(".zip"),
-                    FileFilterUtils.directoryFileFilter());
+                FileFilterUtils.directoryFileFilter());
 
             for (File file : files) {
                 int dayPos = file.getAbsolutePath().indexOf(sasLogDirDay.getName());
@@ -202,7 +224,7 @@ public class Application {
         File dayWorkDirectory = FileUtils.getFile(targetDir, dayDirName);
 
         Collection<File> files = FileUtils.listFiles(dayWorkDirectory, FileFilterUtils.prefixFileFilter("access"),
-                FileFilterUtils.directoryFileFilter());
+            FileFilterUtils.directoryFileFilter());
 
         List<String> nlines = new ArrayList<String>();
         nlines.add(columnName.toString().replace(',', ';'));
@@ -247,7 +269,7 @@ public class Application {
         File fSaved = FileUtils.getFile(backupDir, "aggrega-access-clean-" + dayDirName + ".csv");
         FileUtils.writeLines(fSaved, nlines);
         System.out.println(
-                "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
+            "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
 
     }
 
@@ -273,7 +295,7 @@ public class Application {
         final File dayWorkDirectory = FileUtils.getFile(targetDir, dayDirName);
 
         Collection<File> files = FileUtils.listFiles(dayWorkDirectory,
-                FileFilterUtils.prefixFileFilter("newsesame-back-web"), FileFilterUtils.directoryFileFilter());
+            FileFilterUtils.prefixFileFilter("newsesame-back-web"), FileFilterUtils.directoryFileFilter());
 
         List<LineLog> nlines = new ArrayList<LineLog>();
 
@@ -292,7 +314,35 @@ public class Application {
         File fSaved = FileUtils.getFile(targetDir, fileName);
         FileUtils.writeLines(fSaved, nlines);
         System.out.println(
-                "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
+            "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
+
+    }
+
+    private void aggregateDayBackSeaLog(String[] extractTexte) throws IOException {
+
+        final File dayWorkDirectory = FileUtils.getFile(targetDir, dayDirName);
+
+        Collection<File> files = FileUtils.listFiles(dayWorkDirectory,
+            FileFilterUtils.prefixFileFilter("newsesame-back-sea"), FileFilterUtils.directoryFileFilter());
+
+        List<LineLog> nlines = new ArrayList<LineLog>();
+
+        for (File file : files) {
+            filterTomcatLogLines(extractTexte, nlines, file);
+        }
+
+        // Tri par date
+        Collections.sort(nlines);
+
+        //Enregistrement du resultat :
+        String fileName = "newsesame-back-sea-" + dayDirName + ".csv";
+        if (extractTexte != null && extractTexte.length > 0) {
+            fileName = fileName.replaceFirst(".csv", "-filter-" + extractTexte[0].replaceAll(" ", "-").replaceAll(":", "").replaceAll("/","_") + ".csv");
+        }
+        File fSaved = FileUtils.getFile(targetDir, fileName);
+        FileUtils.writeLines(fSaved, nlines);
+        System.out.println(
+            "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
 
     }
 
@@ -302,7 +352,7 @@ public class Application {
         final File dayWorkDirectory = FileUtils.getFile(targetDir, dayDirName);
 
         Collection<File> files = FileUtils.listFiles(dayWorkDirectory,
-                FileFilterUtils.prefixFileFilter("newsesame-back-web"), FileFilterUtils.directoryFileFilter());
+            FileFilterUtils.prefixFileFilter("newsesame-back-web"), FileFilterUtils.directoryFileFilter());
 
         List<LineLog> nlines = new ArrayList<LineLog>();
 
@@ -386,7 +436,7 @@ public class Application {
         File fSaved = FileUtils.getFile(targetDir, fileName);
         FileUtils.writeLines(fSaved, resultLines);
         System.out.println(
-                "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
+            "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
 
     }
 
