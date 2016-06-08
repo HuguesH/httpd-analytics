@@ -21,21 +21,25 @@ public class Application {
 
     static final String CSV_SEP = ";";
 
-    static final String[] machinesProduction = new String[]{"vl-c-pxx-33", "vl-c-pxx-34"};
-
-    static final String[] machinesFormation = new String[]{"vl-c-fxx-33", "vl-c-fxx-34"};
 
     static final SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm:ss.SSS");
 
     static final SimpleDateFormat dayLogsFormat = new SimpleDateFormat("YYYYMMdd");
 
-    private File saslogDir;
+    File saslogDir;
 
-    private File targetDir;
+    File targetDir;
 
-    private File backupDir;
+    File backupDir;
 
-    private String dayDirName;
+    String dayDirName;
+
+    String[] machines;
+
+
+    String[] servicesHttp = new String[]{"httpd-001","httpd-002"};
+
+    String[] servicesTC = new String[]{"BE_CA_TC", "BE_LCL_TC"};
 
 
     /**
@@ -53,6 +57,7 @@ public class Application {
             Options options = new Options();
             options.addOption("h", "help", false, " write help");
             options.addOption("c", "copySasLog", false, "copy sas log to local directory and unzip all files");
+            options.addOption("b", "copyHttpPhpLog", false, "download log to local directory");
             options.addOption("a", "access", false, "aggregate httpd access log and add stats columns");
             options.addOption("w", "backweb", false, "aggregate backweb log ");
             options.addOption(Option.builder("t").longOpt("tomcat").hasArg().argName("filter").desc("aggregate tomcat log").build());
@@ -60,8 +65,9 @@ public class Application {
             options.addOption("e", "backsea", false, "aggregate back sea log ");
 
             options.addOption("s", "stats", false, "aggregate httpd stats all days");
-            options.addOption("d", "strartDownload", false, "calcul delta between strating a fonction and complete tthe page in Ajax");
-            options.addOption("p","properties", false, "filePath du fichier de properties dans le classpath");
+            options.addOption("b", "between", false, "calcul delta between strating a fonction and complete tthe page in Ajax");
+            options.addOption(Option.builder("p").longOpt("properties").hasArg().argName("filename").desc("filePath du fichier de properties dans le classpath").build());
+            options.getOption("p").hasArg();
 
 
             // parse the command line arguments
@@ -74,8 +80,9 @@ public class Application {
                 formatter.printHelp("logs-analytics", options);
             }
 
+            String pFileName = "app_home.properties";
             if (line.hasOption("p")) {
-
+                pFileName = line.getOptionValues("p")[0];
             }
 
 
@@ -84,15 +91,20 @@ public class Application {
             if(line.getArgs() != null && line.getArgs().length == 1){
                 if(line.getArgs()[0].length() == 1){
                     // SI l'argument principal est de taille 1 on considere que c'est le nombre de jour d'ecart avec le lancement. 0 : Aujourd'hui
-                    application = new Application(Integer.parseInt(line.getArgs()[0]));
+                    application = new Application(Integer.parseInt(line.getArgs()[0]), pFileName);
                 }else {
                     //SINON c'est le nom du dossier dans la SAS LOG correspondant au jour sur lequel on souhaite travailler.
-                    application = new Application(line.getArgs()[0]);
+                    application = new Application(line.getArgs()[0], pFileName);
                 }
             }else{
                 // Si aucun argument global on travail sur J - 1 au niveau du SAS LOG
-                application = new Application(1);
+                application = new Application(1, pFileName);
             }
+            //Deplace et decompress les traces de NewSesame.
+            if (line.hasOption("b")) {
+                application.downloadTodayLogs();
+            }
+
             //Deplace et decompress les traces de NewSesame.
             if (line.hasOption("c")) {
                 application.copyAndUnzipDayLogs();
@@ -104,19 +116,18 @@ public class Application {
 
             //Aggrege toutes les LOG Tomcat dans un fichier trié par date
             if (line.hasOption("w")) {
-
-                application.aggregateDayBackEndLog(null);
+                application.aggregateDayBackEndLog(null, "newsesame-back-web");
             }
 
             //Aggrege les traces SEA
             if(line.hasOption("e")){
-                application.aggregateDayBackSeaLog(null);
+                application.aggregateDayBackEndLog( null, "newsesame-back-sea");
             }
 
             //Aggrege toutes les LOG Tomcat dans un fichier trié par date
             if (line.hasOption("t")) {
                 String[] tomcatArgs = line.getOptionValues("t");
-                application.aggregateDayBackEndLog(tomcatArgs);
+                application.aggregateDayBackEndLog(tomcatArgs, "newsesame-back-web");
             }
 
             //Aggrege toutes les LOG Tomcat dans un fichier trié par date
@@ -137,9 +148,15 @@ public class Application {
 
     }
 
-    public Application(final int beforeToday) throws IOException {
+    /**
+     * Constructeur de l'objet avec un entier
+     * @param beforeToday interger under today
+     * @param propertiesFileName
+     * @throws IOException
+     */
+    Application(final int beforeToday, String propertiesFileName) throws IOException {
 
-        initProperties("app_home.properties");
+        initProperties(propertiesFileName);
         Calendar cal = Calendar.getInstance();
         cal.add(GregorianCalendar.DAY_OF_MONTH, -beforeToday);
         this.dayDirName = dayLogsFormat.format(cal.getTime());
@@ -148,14 +165,25 @@ public class Application {
 
     }
 
-    public Application(final String useDayDirName) throws IOException {
-        initProperties("app_home.properties");
+    /**
+     * Constructuer avec un String correspondant au dossier du jour souhaité pattern YYYYMMdd
+     * @param useDayDirName
+     * @param propertiesFileName
+     * @throws IOException
+     */
+    Application(final String useDayDirName, String propertiesFileName) throws IOException {
+        initProperties(propertiesFileName);
         this.dayDirName = useDayDirName;
         System.out.println(" Work on day : " + dayDirName);
 
     }
 
-    private void initProperties(String propertiesFileName) throws IOException {
+    /**
+     * Initialise l'objet applicaiton avec le conf suprperties spécifié.
+     * @param propertiesFileName
+     * @throws IOException
+     */
+    void initProperties(String propertiesFileName) throws IOException {
         Properties prop = new Properties();
         InputStream inputStream = getClass().getClassLoader().getResourceAsStream(propertiesFileName);
         prop.load(inputStream);
@@ -166,9 +194,15 @@ public class Application {
         System.out.println("TARGET  DIR : " + targetDir);
         this.backupDir = new File(prop.getProperty("backup.dir"));
         System.out.println("BACKUP  DIR : " + backupDir);
+        this.machines = prop.getProperty("machines").split(",");
+        System.out.println("Machines : "+ prop.getProperty("machines") );
     }
 
-    private void aggregateAllAccessLogHttpd() throws IOException {
+    /**
+     * Aggrege les log des services httpd pour un ensemble de fichier "aggrega-access-clean" jour pour faire des statistiques
+     * @throws IOException
+     */
+    void aggregateAllAccessLogHttpd() throws IOException {
 
         Collection<File> files = FileUtils.listFiles(backupDir, FileFilterUtils.prefixFileFilter("aggrega-access-clean"), FileFilterUtils.directoryFileFilter());
 
@@ -189,13 +223,17 @@ public class Application {
     }
 
 
-    private void copyAndUnzipDayLogs() throws IOException {
+    /**
+     * Copie et decompresse les traces du SAS LOG pour permettre les analyses du jour sur un espace local.
+     * @throws IOException
+     */
+    void copyAndUnzipDayLogs() throws IOException {
 
 
         ZipUtils unzip = new ZipUtils();
         File sasLogDirDay = FileUtils.getFile(saslogDir, dayDirName);
 
-        for (String machine : machinesProduction) {
+        for (String machine : machines) {
             File machioneDir = FileUtils.getFile(sasLogDirDay, machine);
             System.out.println(" Read logs on " + machioneDir.getAbsolutePath());
             Collection<File> files = FileUtils.listFiles(machioneDir, FileFilterUtils.suffixFileFilter(".zip"),
@@ -219,7 +257,30 @@ public class Application {
     }
 
 
-    private void aggregateDayAccessLogHttpd() throws IOException {
+    void downloadTodayLogs() throws IOException {
+
+        /**
+        HttpGet
+            httpGet =
+            new HttpGet(
+                "https://applogscope.pacifica.group.gca/explorateur/ressource.php?id=data%2FProd%2FVL-C-PXX-34%20%28NEWSESAME%29%2Fhttpd%2Fhttpd-002%2Faccess_2016.06.05_log&orderby=nom&order=asc");
+        CredentialsProvider provider = new BasicCredentialsProvider();
+        UsernamePasswordCredentials credentials = new UsernamePasswordCredentials(user, motDePasse);
+        provider.setCredentials(AuthScope.ANY, credentials);
+        HttpClient client = HttpClientBuilder.create().setDefaultCredentialsProvider(provider).build();
+        HttpResponse response = client.execute(httpGet);
+        int statusCode = response.getStatusLine().getStatusCode();
+         **/
+
+
+    }
+
+
+    /**
+     * Aggrege les traces Http d'une journée pour faire une analyse ponctuelle des erreurs et de la performance de l'application
+     * @throws IOException
+     */
+    void aggregateDayAccessLogHttpd() throws IOException {
 
         File dayWorkDirectory = FileUtils.getFile(targetDir, dayDirName);
 
@@ -235,23 +296,20 @@ public class Application {
             List<String> lines = FileUtils.readLines(file);
             for (String line : lines) {
 
-                if (!line.contains("/health-checks")) {
+                if (!line.contains("/health-checks")){
 
                     // @TODO demander a CAAGIS de remplacer le header COOKIE par le correlationId
-                    // @TODO demander a CAAGIS de mettre le header Location
                     StringBuilder strBuild = new StringBuilder(line.replaceAll("-;-", ""));
+                    for(String machine : machines){
+                        if(file.getAbsolutePath().contains(machine)){
+                            strBuild.append(machine).append(CSV_SEP);
+                        }
+                    }
 
-                    if (file.getAbsolutePath().contains("vl-c-pxx-33")) {
-                        strBuild.append("vl-c-pxx-33").append(CSV_SEP);
-                    }
-                    if (file.getAbsolutePath().contains("vl-c-pxx-34")) {
-                        strBuild.append("vl-c-pxx-34").append(CSV_SEP);
-                    }
-                    if (file.getAbsolutePath().contains("httpd-001")) {
-                        strBuild.append("httpd-001").append(CSV_SEP);
-                    }
-                    if (file.getAbsolutePath().contains("httpd-002")) {
-                        strBuild.append("httpd-002").append(CSV_SEP);
+                    for(String serviceHttpd : servicesHttp){
+                        if(file.getAbsolutePath().contains(serviceHttpd)){
+                            strBuild.append(serviceHttpd).append(CSV_SEP);
+                        }
                     }
 
                     final String[] cLine = line.split(CSV_SEP);
@@ -273,7 +331,12 @@ public class Application {
 
     }
 
-    private Date matchDateLine(final String lineLogback) {
+    /**
+     * Vérifie si la ligne de log est bien une trace Logback
+     * @param lineLogback
+     * @return
+     */
+    Date matchDateLine(final String lineLogback) {
         Date dResult = null;
         try {
             if (lineLogback.length() > 15) {
@@ -290,64 +353,63 @@ public class Application {
     }
 
 
-    private void aggregateDayBackEndLog(String[] extractTexte) throws IOException {
+    /**
+     * Aggrege les
+     * @param extractTexte
+     * @param logName
+     * @throws IOException
+     */
+    void aggregateDayBackEndLog(String[] extractTexte, String logName)
+        throws IOException {
 
         final File dayWorkDirectory = FileUtils.getFile(targetDir, dayDirName);
 
         Collection<File> files = FileUtils.listFiles(dayWorkDirectory,
-            FileFilterUtils.prefixFileFilter("newsesame-back-web"), FileFilterUtils.directoryFileFilter());
+            FileFilterUtils.prefixFileFilter(logName), FileFilterUtils.directoryFileFilter());
 
-        List<LineLog> nlines = new ArrayList<LineLog>();
-
-        for (File file : files) {
-            filterTomcatLogLines(extractTexte, nlines, file);
+        for(String serviceTC: servicesTC){
+            List<LineLog> nlines = new ArrayList<LineLog>();
+            for (File file : files) {
+                if(file.getPath().contains(serviceTC) ){
+                    filterTomcatLogLines(extractTexte, nlines, file);
+                }
+            }
+            writeBackEndAgregateLines(logName, serviceTC, extractTexte, nlines);
         }
-
-        // Tri par date
-        Collections.sort(nlines);
-
-        //Enregistrement du resultat :
-        String fileName = "newsesame-back-web-" + dayDirName + ".csv";
-        if (extractTexte != null && extractTexte.length > 0) {
-            fileName = fileName.replaceFirst(".csv", "-filter-" + extractTexte[0].replaceAll(" ", "-").replaceAll(":", "").replaceAll("/","_") + ".csv");
-        }
-        File fSaved = FileUtils.getFile(targetDir, fileName);
-        FileUtils.writeLines(fSaved, nlines);
-        System.out.println(
-            "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
-
     }
 
-    private void aggregateDayBackSeaLog(String[] extractTexte) throws IOException {
+    /**
+     * Ecrit le fichier aggrége des traces.
+     * @param logName
+     * @param serviceTomcat
+     * @param extractTexte
+     * @param nlines
+     * @throws IOException
+     */
+    void writeBackEndAgregateLines(String logName, String serviceTomcat, String[] extractTexte, List<LineLog> nlines) throws IOException {
+        if(nlines.size() > 0){
+            // Tri par date
+            Collections.sort(nlines);
 
-        final File dayWorkDirectory = FileUtils.getFile(targetDir, dayDirName);
-
-        Collection<File> files = FileUtils.listFiles(dayWorkDirectory,
-            FileFilterUtils.prefixFileFilter("newsesame-back-sea"), FileFilterUtils.directoryFileFilter());
-
-        List<LineLog> nlines = new ArrayList<LineLog>();
-
-        for (File file : files) {
-            filterTomcatLogLines(extractTexte, nlines, file);
+            //Enregistrement du resultat :
+            StringBuilder buildFileName = new StringBuilder(serviceTomcat).append("-");
+            buildFileName.append(logName).append("-").append(dayDirName);
+            if(extractTexte != null && extractTexte.length > 0){
+                buildFileName.append("-filter-" ).append(extractTexte[0].replaceAll(" ", "-").replaceAll(":", "").replaceAll("/", "_"));
+            }
+            buildFileName.append(".txt");
+            File fSaved = FileUtils.getFile(targetDir, buildFileName.toString());
+            FileUtils.writeLines(fSaved, nlines);
+            System.out.println(
+                "Ecriture du fichier  " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
+        }else{
+            System.out.println(
+                "Aucune ligne pour ce service " + serviceTomcat);
         }
-
-        // Tri par date
-        Collections.sort(nlines);
-
-        //Enregistrement du resultat :
-        String fileName = "newsesame-back-sea-" + dayDirName + ".csv";
-        if (extractTexte != null && extractTexte.length > 0) {
-            fileName = fileName.replaceFirst(".csv", "-filter-" + extractTexte[0].replaceAll(" ", "-").replaceAll(":", "").replaceAll("/","_") + ".csv");
-        }
-        File fSaved = FileUtils.getFile(targetDir, fileName);
-        FileUtils.writeLines(fSaved, nlines);
-        System.out.println(
-            "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size()) + " lines ");
-
     }
 
 
-    private void deltaDayBackEndLog(String[] deltaTexte) throws IOException {
+    void deltaDayBackEndLog(String[] deltaTexte) throws IOException {
 
         final File dayWorkDirectory = FileUtils.getFile(targetDir, dayDirName);
 
@@ -441,8 +503,15 @@ public class Application {
     }
 
 
-    private void filterTomcatLogLines(String[] extractTexte, List<LineLog> nlines, File file) throws IOException {
-        System.out.println(" Find newsesame-back-web log file  " + file.getAbsolutePath());
+    /**
+     * Lit les traces d'un fichier de trace Tomcat et ajoute un objet ligne de log dans la liste passé en paramètre.
+     * @param extractTexte
+     * @param nlines
+     * @param file
+     * @throws IOException
+     */
+    void filterTomcatLogLines(String[] extractTexte, List<LineLog> nlines, File file) throws IOException {
+        System.out.println(" Find newsesame log file  " + file.getAbsolutePath());
         List<String> lines = FileUtils.readLines(file);
 
         Date preTime = null;
@@ -453,33 +522,35 @@ public class Application {
         }
         for (String line : lines) {
             Date dateLine = matchDateLine(line);
-            if (dateLine != null) {
-                preTime = dateLine;
-                if (extractTexte != null && extractTexte.length > 0) {
-                    goodLine = false;
-                    for (String extract : extractTexte) {
-                        if (line.contains(extract)) {
-                            goodLine = true;
+            if (! line.contains("pacifica.ns.web.filter.LoggingFilter  -  -  - GET /health-checks")){
+                if (dateLine != null) {
+                    preTime = dateLine;
+                    if (extractTexte != null && extractTexte.length > 0) {
+                        goodLine = false;
+                        for (String extract : extractTexte) {
+                            if (line.contains(extract)) {
+                                goodLine = true;
+                            }
                         }
                     }
+                } else {
+                    dateLine = preTime;
                 }
-            } else {
-                dateLine = preTime;
-            }
-            if (goodLine) {
-                nlines.add(new LineLog(dateLine, line, file.getParentFile().getName()));
+                if (goodLine) {
+                    nlines.add(new LineLog(dateLine, line, file.getParentFile().getName()));
+                }
             }
         }
     }
 
 
     /**
-     * Nettoyage de la chaine de caactere URI pour arriver à une chaine uniqu sans cas fonctionnel.
+     * Nettoyage de la chaine de caactere URI pour arriver à une chaine unique sans cas fonctionnel.
      *
      * @param uri
      * @return
      */
-    private String cleanUri(String uri) {
+    String cleanUri(String uri) {
         String cleanUri = uri;
         // Identifiant IBAN :
         cleanUri = cleanUriAfterSequence(cleanUri, "/iban/");
@@ -501,7 +572,13 @@ public class Application {
         return cleanUri;
     }
 
-    private String cleanUriAfterSequence(String uri, String seq) {
+    /**
+     * Nettoyage d'une fin d'URI, et replacement par #
+     * @param uri
+     * @param seq
+     * @return
+     */
+    String cleanUriAfterSequence(String uri, String seq) {
         String cleanUri = uri;
         int indexSeq = uri.lastIndexOf(seq);
         if (indexSeq > 0) {
@@ -513,7 +590,7 @@ public class Application {
     /**
      * Object representant une ligne de log pour permettre le tri par date
      */
-    private class LineLog implements Comparable<LineLog> {
+    class LineLog implements Comparable<LineLog> {
 
         LineLog(Date dateTime, String line, String folder) {
 
@@ -540,9 +617,9 @@ public class Application {
     }
 
     /**
-     *
+     * Objet permettant de stocker des lignes concernant un evenement.
      */
-    private class DeltaLine {
+    class DeltaLine {
 
         DeltaLine(LineLog startLineLog) {
             _startLineLog = startLineLog;
