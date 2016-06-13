@@ -47,7 +47,7 @@ public class Application {
      * common
      */
     String columnName =
-        "Jour;Heure;HttpStatus;Duree;Bytes;IP;Method;Host;URI;QueryParams;serveur;service;cleanURI;HH";
+        "Jour;Heure;HttpStatus;Duree;Bytes;IP;Method;Host;URI;QueryParams;JsessionId;Cookie;serveur;service;cleanURI;HH";
 
 
     public static void main(String[] args) {
@@ -298,8 +298,8 @@ public class Application {
 
                 if (!line.contains("/health-checks")){
 
-                    // @TODO demander a CAAGIS de remplacer le header COOKIE par le correlationId
-                    StringBuilder strBuild = new StringBuilder(line.replaceAll("-;-", ""));
+                    StringBuilder strBuild = new StringBuilder(line);
+                    strBuild.append(CSV_SEP);
                     for(String machine : machines){
                         if(file.getAbsolutePath().contains(machine)){
                             strBuild.append(machine).append(CSV_SEP);
@@ -537,7 +537,27 @@ public class Application {
                     dateLine = preTime;
                 }
                 if (goodLine) {
+
+                    /** Read Payload SOAP FINAXY for extract Users ans profile.
+
+                    if(line.startsWith("Payload: ")){
+                        StringBuilder bLine= new StringBuilder();
+                        //User :
+                        int indexIdent = line.indexOf("<identificationNumber>");
+                        if(indexIdent > 0){
+                            bLine.append(CSV_SEP).append(line.substring(indexIdent + 22, indexIdent + 31));
+                            //Profile :
+                            int indexProfile = line.indexOf("<profile>");
+                            bLine.append(CSV_SEP).append(line.substring(indexProfile + 9, indexProfile + 12)) ;
+                            nlines.add(new LineLog(dateLine, bLine.toString(), file.getParentFile().getName()));
+                        }
+
+
+                    }
+                     **/
+
                     nlines.add(new LineLog(dateLine, line, file.getParentFile().getName()));
+
                 }
             }
         }
@@ -558,7 +578,7 @@ public class Application {
         cleanUri = cleanUriAfterSequence(cleanUri, "/referentiel/aaa/v1/vehicule/");
         cleanUri = cleanUriAfterSequence(cleanUri, "/referentiel/aaa/v1/vehicules/");
         // Numero de versions application front
-        cleanUri = cleanUri.replaceFirst("\\d{1}[.]\\d{1}[.]\\d{2}", "x.y.z");
+        cleanUri = cleanUri.replaceFirst("\\d{1,}[.]\\d{1,}[.]\\d{1,}", "x.y.z");
         // Numero de proposition
         cleanUri = cleanUri.replaceFirst("\\d{11}[V]\\d{3}", "{###V#}");
         // Remplacement des numéros swift : 10, devis et contrats : 15, PDF jusqu'a 40
