@@ -50,7 +50,7 @@ public class Application{
      */
     String
         columnName =
-        "Jour;Heure;HttpStatus;Duree;Bytes;IP;Method;Host;URI;QueryParams;JsessionId;Cookie;serveur;service;cleanURI;HH";
+        "Jour;Heure;HttpStatus;Duree;Bytes;IP;Method;Host;URI;QueryParams;JsessionId;Cookie;serveur;service;cleanURI;type;HH";
 
 
     public static void main(String[] args) {
@@ -60,7 +60,7 @@ public class Application{
             Options options = new Options();
             options.addOption("h", "help", false, " write help");
             options.addOption("c", "copySasLog", false, "copy sas log to local directory and unzip all files");
-            options.addOption("b", "copyHttpPhpLog", false, "download log to local directory");
+            options.addOption("d", "copyHttpPhpLog", false, "download log to local directory");
             options.addOption("a", "access", false, "aggregate httpd access log and add stats columns");
             options.addOption("w", "backweb", false, "aggregate backweb log ");
             options.addOption(
@@ -142,8 +142,8 @@ public class Application{
             // Aggrege toutes les LOG Tomcat dans un fichier trié par date
             if(line.hasOption("d")){
                 application.deltaDayBackEndLog(
-                    new String[]{"AIGUILLAGE # Formatted URL : /frontend/dossier-client/index-cl.html#/home",
-                        "recupèration de la liste des notifications .  (DossierClientRestController.java:140)"});
+                    new String[]{"AIGUILLAGE # Formatted URL : /frontend/dossier-client/",
+                        "POST /api/dossierclient/_list : 200"});
             }
 
             // Genere un fichier global pour travailler sur toutes les stats en même temps.
@@ -360,6 +360,8 @@ public class Application{
                     // Ajout de l'URI Clean permettant de regrouper d'exclure les versions et les numéro
                     // fonctionnels.
                     strBuild.append(cleanUri(cLine[8])).append(CSV_SEP);
+                    // Ajout type ressource Http
+                    strBuild.append(typeUri(cLine[8])).append(CSV_SEP);
                     // Ajout de l'Heure pour contrler le flux dans la suite de la journée.
                     strBuild.append(cLine[1].substring(0, 2)).append(CSV_SEP);
 
@@ -375,6 +377,20 @@ public class Application{
             "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
                 + " lines ");
 
+    }
+
+    private String typeUri(String uri) {
+        String[] uriDirs = uri.split("/");
+        StringBuilder typeB = new StringBuilder(uriDirs[1]).append("/");
+        if(uriDirs.length > 2 ){
+            if(uriDirs[2].startsWith("0.")){
+                typeB.append("static");
+            }else{
+                typeB.append(uriDirs[2]);
+            }
+
+        }
+        return typeB.toString();
     }
 
     /**
