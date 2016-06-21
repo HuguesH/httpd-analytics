@@ -17,7 +17,7 @@ import hh.tools.file.ZipUtils;
 /**
  * Created by Hugues on 07/03/2016.
  */
-public class Application{
+public class Application {
 
 
     static final String CSV_SEP = ";";
@@ -49,12 +49,12 @@ public class Application{
      * common
      */
     String
-        columnName =
-        "Jour;Heure;HttpStatus;Duree;Bytes;IP;Method;Host;URI;QueryParams;JsessionId;Cookie;serveur;service;cleanURI;type;HH";
+            columnName =
+            "Jour;Heure;HttpStatus;Duree;Bytes;IP;Method;Host;URI;QueryParams;JsessionId;Cookie;serveur;service;cleanURI;type;HH";
 
 
     public static void main(String[] args) {
-        try{
+        try {
 
             // create Options object
             Options options = new Options();
@@ -64,18 +64,18 @@ public class Application{
             options.addOption("a", "access", false, "aggregate httpd access log and add stats columns");
             options.addOption("w", "backweb", false, "aggregate backweb log ");
             options.addOption(
-                Option.builder("t").longOpt("tomcat").hasArg().argName("filter").desc("aggregate tomcat log").build());
+                    Option.builder("t").longOpt("tomcat").hasArg().argName("filter").desc("aggregate tomcat log").build());
             options.getOption("t").hasArg();
 
             options.addOption("s", "stats", false, "aggregate httpd stats all days");
             options.addOption("b", "between", false,
-                "calcul delta between strating a fonction and complete tthe page in Ajax");
+                    "calcul delta between strating a fonction and complete tthe page in Ajax");
             options.addOption(Option.builder("p")
-                .longOpt("properties")
-                .hasArg()
-                .argName("filename")
-                .desc("filePath du fichier de properties dans le classpath")
-                .build());
+                    .longOpt("properties")
+                    .hasArg()
+                    .argName("filename")
+                    .desc("filePath du fichier de properties dans le classpath")
+                    .build());
             options.getOption("p").hasArg();
 
 
@@ -84,74 +84,72 @@ public class Application{
             CommandLine line = parser.parse(options, args);
 
             // validate that block-size has been set
-            if(line.hasOption("h")){
+            if (line.hasOption("h")) {
                 HelpFormatter formatter = new HelpFormatter();
                 formatter.printHelp("logs-analytics", options);
             }
 
             String pFileName = "newsesame_prod.properties";
-            if(line.hasOption("p")){
+            if (line.hasOption("p")) {
                 pFileName = line.getOptionValues("p")[0];
             }
 
 
             Application application;
-            if(line.getArgs() != null && line.getArgs().length == 1){
-                if(line.getArgs()[0].length() == 1){
+            if (line.getArgs() != null && line.getArgs().length == 1) {
+                if (line.getArgs()[0].length() == 1) {
                     // SI l'argument principal est de taille 1 on considere que c'est le nombre de jour
                     // d'ecart avec le lancement. 0 : Aujourd'hui
                     application = new Application(Integer.parseInt(line.getArgs()[0]), pFileName);
-                }else {
+                } else {
                     // SINON c'est le nom du dossier dans la SAS LOG correspondant au jour sur lequel on
                     // souhaite travailler.
                     application = new Application(line.getArgs()[0], pFileName);
                 }
-            }else {
+            } else {
                 // Si aucun argument global on travail sur J - 1 au niveau du SAS LOG
                 application = new Application(1, pFileName);
             }
             // Deplace et decompress les traces de NewSesame.
-            if(line.hasOption("b")){
+            if (line.hasOption("b")) {
                 application.downloadTodayLogs();
             }
 
             // Deplace et decompress les traces de NewSesame.
-            if(line.hasOption("c")){
+            if (line.hasOption("c")) {
                 application.copyAndUnzipDayLogs();
             }
             // Aggrege les access log des deux machines et ajoute des colonnes facilitant les stats
-            if(line.hasOption("a")){
+            if (line.hasOption("a")) {
                 application.aggregateDayAccessLogHttpd();
             }
 
             // Aggrege toutes les LOG Tomcat dans un fichier trié par date
-            if(line.hasOption("w")){
-                for(String fileName : application.logNameJAVA){
+            if (line.hasOption("w")) {
+                for (String fileName : application.logNameJAVA) {
                     application.aggregateDayBackEndLog(null, fileName);
                 }
             }
 
             // Aggrege toutes les LOG Tomcat dans un fichier trié par date
-            if(line.hasOption("t")){
+            if (line.hasOption("t")) {
                 String[] tomcatArgs = line.getOptionValues("t");
-                for(String fileName : application.logNameJAVA){
+                for (String fileName : application.logNameJAVA) {
                     application.aggregateDayBackEndLog(tomcatArgs, fileName);
                 }
             }
 
             // Aggrege toutes les LOG Tomcat dans un fichier trié par date
-            if(line.hasOption("d")){
-                application.deltaDayBackEndLog(
-                    new String[]{"AIGUILLAGE # Formatted URL : /frontend/dossier-client/",
-                        "POST /api/dossierclient/_list : 200"});
+            if (line.hasOption("d")) {
+                application.deltaDayBackEndLog();
             }
 
             // Genere un fichier global pour travailler sur toutes les stats en même temps.
-            if(line.hasOption("s")){
+            if (line.hasOption("s")) {
                 application.aggregateAllAccessLogHttpd();
             }
 
-        }catch(Exception e){
+        } catch (Exception e) {
             System.out.println(" Exception " + e.getMessage());
             e.printStackTrace();
         }
@@ -227,15 +225,15 @@ public class Application{
     void aggregateAllAccessLogHttpd() throws IOException {
 
         Collection<File>
-            files =
-            FileUtils.listFiles(backupDir, FileFilterUtils.prefixFileFilter("aggrega-access-clean"),
-                FileFilterUtils.directoryFileFilter());
+                files =
+                FileUtils.listFiles(backupDir, FileFilterUtils.prefixFileFilter("aggrega-access-clean"),
+                        FileFilterUtils.directoryFileFilter());
 
         List<String> nlines = new ArrayList<String>();
-        for(File file : files){
+        for (File file : files) {
             System.out.println(" Find log file  " + file.getAbsolutePath());
             List<String> lines = FileUtils.readLines(file);
-            for(String line : lines){
+            for (String line : lines) {
                 nlines.add(line);
             }
 
@@ -244,8 +242,8 @@ public class Application{
         File fSaved = FileUtils.getFile(backupDir, "aggrega-access-all.csv");
         FileUtils.writeLines(fSaved, nlines);
         System.out.println(
-            "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
-                + " lines ");
+                "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
+                        + " lines ");
     }
 
 
@@ -261,36 +259,36 @@ public class Application{
         ZipUtils unzip = new ZipUtils();
         File sasLogDirDay = FileUtils.getFile(saslogDir, dayDirName);
 
-        for(String machine : machines){
+        for (String machine : machines) {
             File machioneDir = FileUtils.getFile(sasLogDirDay, machine);
             System.out.println(" Read logs on " + machioneDir.getAbsolutePath());
             Collection<File>
-                filesZip =
-                FileUtils.listFiles(machioneDir, FileFilterUtils.suffixFileFilter(".zip"),
-                    FileFilterUtils.directoryFileFilter());
+                    filesZip =
+                    FileUtils.listFiles(machioneDir, FileFilterUtils.suffixFileFilter(".zip"),
+                            FileFilterUtils.directoryFileFilter());
 
-            for(File file : filesZip){
+            for (File file : filesZip) {
                 int dayPos = file.getAbsolutePath().indexOf(sasLogDirDay.getName());
                 File unzipDir = new File(targetDir + "/" + file.getParent().substring(dayPos));
                 System.out.println("unzip file " + file.getName() + " here : " + unzipDir.getAbsolutePath());
                 unzipDir.mkdirs();
 
-                try{
+                try {
                     unzip.unzip(file.getAbsolutePath(), unzipDir.getAbsolutePath());
-                }catch(IOException e){
+                } catch (IOException e) {
                     e.printStackTrace();
                 }
             }
 
             Collection<File>
-                filesTxt =
-                FileUtils.listFiles(machioneDir, FileFilterUtils.suffixFileFilter(".txt"),
-                    FileFilterUtils.directoryFileFilter());
+                    filesTxt =
+                    FileUtils.listFiles(machioneDir, FileFilterUtils.suffixFileFilter(".txt"),
+                            FileFilterUtils.directoryFileFilter());
 
-            for(File file : filesTxt){
+            for (File file : filesTxt) {
                 int dayPos = file.getAbsolutePath().indexOf(sasLogDirDay.getName());
                 File copyDir = new File(targetDir + "/" + file.getParent().substring(dayPos));
-                FileUtils.copyFileToDirectory(file,copyDir);
+                FileUtils.copyFileToDirectory(file, copyDir);
 
             }
         }
@@ -327,31 +325,31 @@ public class Application{
         File dayWorkDirectory = FileUtils.getFile(targetDir, dayDirName);
 
         Collection<File>
-            files =
-            FileUtils.listFiles(dayWorkDirectory, FileFilterUtils.prefixFileFilter("access"),
-                FileFilterUtils.directoryFileFilter());
+                files =
+                FileUtils.listFiles(dayWorkDirectory, FileFilterUtils.prefixFileFilter("access"),
+                        FileFilterUtils.directoryFileFilter());
 
         List<String> nlines = new ArrayList<String>();
         nlines.add(columnName.toString().replace(',', ';'));
 
-        for(File file : files){
+        for (File file : files) {
             System.out.println(" Find access file  " + file.getAbsolutePath());
 
             List<String> lines = FileUtils.readLines(file);
-            for(String line : lines){
+            for (String line : lines) {
 
-                if(!line.contains("/health-checks")){
+                if (!line.contains("/health-checks")) {
 
                     StringBuilder strBuild = new StringBuilder(line);
                     strBuild.append(CSV_SEP);
-                    for(String machine : machines){
-                        if(file.getAbsolutePath().contains(machine)){
+                    for (String machine : machines) {
+                        if (file.getAbsolutePath().contains(machine)) {
                             strBuild.append(machine).append(CSV_SEP);
                         }
                     }
 
-                    for(String serviceHttp : servicesHTTP){
-                        if(file.getAbsolutePath().contains(serviceHttp)){
+                    for (String serviceHttp : servicesHTTP) {
+                        if (file.getAbsolutePath().contains(serviceHttp)) {
                             strBuild.append(serviceHttp).append(CSV_SEP);
                         }
                     }
@@ -374,18 +372,18 @@ public class Application{
         File fSaved = FileUtils.getFile(backupDir, "aggrega-access-clean-" + dayDirName + ".csv");
         FileUtils.writeLines(fSaved, nlines);
         System.out.println(
-            "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
-                + " lines ");
+                "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
+                        + " lines ");
 
     }
 
     private String typeUri(String uri) {
         String[] uriDirs = uri.split("/");
         StringBuilder typeB = new StringBuilder(uriDirs[1]).append("/");
-        if(uriDirs.length > 2 ){
-            if(uriDirs[2].startsWith("0.")){
+        if (uriDirs.length > 2) {
+            if (uriDirs[2].startsWith("0.")) {
                 typeB.append("static");
-            }else{
+            } else {
                 typeB.append(uriDirs[2]);
             }
 
@@ -401,14 +399,14 @@ public class Application{
      */
     Date matchDateLine(final String lineLogback) {
         Date dResult = null;
-        try{
-            if(lineLogback.length() > 15){
+        try {
+            if (lineLogback.length() > 15) {
                 String timeLine = lineLogback.substring(0, 13);
-                if(StringUtils.isNotBlank(timeLine)){
+                if (StringUtils.isNotBlank(timeLine)) {
                     dResult = dateFormat.parse(timeLine);
                 }
             }
-        }catch(ParseException e){
+        } catch (ParseException e) {
             // Not a patern with date, a stack trace or a file
         }
         return dResult;
@@ -428,14 +426,14 @@ public class Application{
         final File dayWorkDirectory = FileUtils.getFile(targetDir, dayDirName);
 
         Collection<File>
-            files =
-            FileUtils.listFiles(dayWorkDirectory, FileFilterUtils.prefixFileFilter(logName),
-                FileFilterUtils.directoryFileFilter());
+                files =
+                FileUtils.listFiles(dayWorkDirectory, FileFilterUtils.prefixFileFilter(logName),
+                        FileFilterUtils.directoryFileFilter());
 
-        for(String serviceJAVA : servicesJAVA){
+        for (String serviceJAVA : servicesJAVA) {
             List<LineLog> nlines = new ArrayList<LineLog>();
-            for(File file : files){
-                if(file.getPath().contains(serviceJAVA)){
+            for (File file : files) {
+                if (file.getPath().contains(serviceJAVA)) {
                     filterTomcatLogLines(extractTexte, nlines, file);
                 }
             }
@@ -453,133 +451,135 @@ public class Application{
      * @throws IOException
      */
     void writeBackEndAgregateLines(String logName, String serviceTomcat, String[] extractTexte, List<LineLog> nlines)
-        throws IOException {
-        if(nlines.size() > 0){
+            throws IOException {
+        if (nlines.size() > 0) {
             // Tri par date
             Collections.sort(nlines);
 
             // Enregistrement du resultat :
             StringBuilder buildFileName = new StringBuilder(serviceTomcat).append("-");
             buildFileName.append(logName).append("-").append(dayDirName);
-            if(extractTexte != null && extractTexte.length > 0){
+            if (extractTexte != null && extractTexte.length > 0) {
                 buildFileName.append("-filter-")
-                    .append(extractTexte[0].replaceAll(" ", "-").replaceAll(":", "").replaceAll("/", "_"));
+                        .append(extractTexte[0].replaceAll(" ", "-").replaceAll(":", "").replaceAll("/", "_"));
             }
             buildFileName.append(".txt");
             File fSaved = FileUtils.getFile(targetDir, buildFileName.toString());
             FileUtils.writeLines(fSaved, nlines);
             System.out.println(
-                "Ecriture du fichier  " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
-                    + " lines ");
-        }else {
+                    "Ecriture du fichier  " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
+                            + " lines ");
+        } else {
             System.out.println("Aucune ligne pour ce service " + serviceTomcat);
         }
     }
 
 
-    void deltaDayBackEndLog(String[] deltaTexte) throws IOException {
+    void deltaDayBackEndLog() throws IOException {
+
+        String[] deltaTexte = new String[]{"AIGUILLAGE # Formatted URL : /frontend/dossier-client/",
+                "POST /api/dossierclient/_list : 200"};
 
         final File dayWorkDirectory = FileUtils.getFile(targetDir, dayDirName);
 
         Collection<File>
-            files =
-            FileUtils.listFiles(dayWorkDirectory, FileFilterUtils.prefixFileFilter("newsesame-back-web"),
-                FileFilterUtils.directoryFileFilter());
-
-        List<LineLog> nlines = new ArrayList<LineLog>();
-
-        for(File file : files){
-            filterTomcatLogLines(deltaTexte, nlines, file);
-        }
-
-        // Tri par date
-        Collections.sort(nlines);
-
-        Map<String, DeltaLine> nDelta = new HashMap<String, DeltaLine>();
-
-        for(LineLog logLine : nlines){
-
-            String[] logDatas = logLine._line.split(" - ");
-            if(logDatas.length < 4){
-                System.out.println(" Bad starting pattern, not a good logLine");
-            }
-            // Concatenation du User et du correlationId
-            String key = logDatas[1] + ";" + logDatas[2];
-
-            DeltaLine delta = nDelta.get(key);
-
-            // Si la ligne contient le texte de depart
-            if(logLine._line.contains(deltaTexte[0])){
-                if(delta != null){
-                    System.out.println(
-                        "!!!  Strange 2 start for your start line on this user and correlationId, change the key ??????? "
-                            + key);
-                }
-                nDelta.put(key, new DeltaLine(logLine));
-            }
-        }
-
-        for(LineLog logLine : nlines){
-
-            String[] logDatas = logLine._line.split(" - ");
-            if(logDatas.length < 4){
-                System.out.println(" Bad starting pattern, not a good logLine");
-            }
-            // Concatenation du User et du correlationId
-            String key = logDatas[1] + ";" + logDatas[2];
-
-            DeltaLine delta = nDelta.get(key);
-
-            if(logLine._line.contains(deltaTexte[1])){
-                if(delta == null){
-                    System.out.println(
-                        "!!!  Strange no start for your  end line on this user and correlationId, not a dossier client starting ?? "
-                            + key);
-                }else {
-                    delta.putEndLogLine(logLine);
+                files =
+                FileUtils.listFiles(dayWorkDirectory, FileFilterUtils.prefixFileFilter("newsesame-back-web"),
+                        FileFilterUtils.directoryFileFilter());
+        for (String serviceJAVA : servicesJAVA) {
+            List<LineLog> nlines = new ArrayList<LineLog>();
+            for (File file : files) {
+                if (file.getPath().contains(serviceJAVA)) {
+                    filterTomcatLogLines(deltaTexte, nlines, file);
                 }
             }
-        }
 
-        List<String> resultLines = new ArrayList<String>();
-        resultLines.add("user;correlationId;startTime;downloadTime");
-        for(String key : nDelta.keySet()){
-            DeltaLine deltaLine = nDelta.get(key);
-            StringBuilder lineBuilder = new StringBuilder();
-            if(deltaLine.nextSessionEndLineLog.isEmpty()){
-                System.out.println("Aucun element de fin pour la clés d'entrée : " + key);
-                System.out.println("Aucun element de fin pour la ligne d'entrée : " + deltaLine._startLineLog._line);
-            }else {
-                Collections.sort(deltaLine.nextSessionEndLineLog);
-                LineLog endLIne = deltaLine.nextSessionEndLineLog.get(0);
-                if(endLIne == null){
+            Map<String, DeltaLine> nDelta = new HashMap<String, DeltaLine>();
+
+            for (LineLog logLine : nlines) {
+
+                String[] logDatas = logLine._line.split(" - ");
+                if (logDatas.length < 4) {
+                    System.out.println(" Bad starting pattern, not a good logLine");
+                }
+                // Concatenation du User et du correlationId
+                String key = logDatas[1] + CSV_SEP + logDatas[2];
+
+                DeltaLine delta = nDelta.get(key);
+
+                // Si la ligne contient le texte de depart
+                if (logLine._line.contains(deltaTexte[0])) {
+                    if (delta != null) {
+                        System.out.println(
+                                "!!!  Strange 2 start for your start line on this user and correlationId, change the key ??????? "
+                                        + key);
+                    }
+
+                    nDelta.put(key, new DeltaLine(logDatas[0].substring(logDatas[0].length() - 5), logLine));
+                }
+            }
+
+            for (LineLog logLine : nlines) {
+
+                String[] logDatas = logLine._line.split(" - ");
+                if (logDatas.length < 4) {
+                    System.out.println(" Bad starting pattern, not a good logLine");
+                }
+                // Concatenation du User et du correlationId
+                String key = logDatas[1] + CSV_SEP + logDatas[2];
+
+                DeltaLine delta = nDelta.get(key);
+
+                if (logLine._line.contains(deltaTexte[1])) {
+                    if (delta == null) {
+                        System.out.println(
+                                "!!!  Strange no start for your end line on this user and correlationId, not a dossier client starting ?? "
+                                        + key);
+                    } else {
+                        delta.putEndLogLine(logLine);
+                    }
+                }
+            }
+
+            List<String> resultLines = new ArrayList<String>();
+            resultLines.add("numcr;user;correlationId;startTime;downloadTime");
+            for (String key : nDelta.keySet()) {
+                DeltaLine deltaLine = nDelta.get(key);
+                StringBuilder lineBuilder = new StringBuilder();
+                if (deltaLine.nextSessionEndLineLog.isEmpty()) {
                     System.out.println("Aucun element de fin pour la clés d'entrée : " + key);
-                }else {
+                    System.out.println("Aucun element de fin pour la ligne d'entrée : " + deltaLine._startLineLog._line);
+                } else {
+                    Collections.sort(deltaLine.nextSessionEndLineLog);
+                    LineLog endLIne = deltaLine.nextSessionEndLineLog.get(0);
+                    if (endLIne == null) {
+                        System.out.println("Aucun element de fin pour la clés d'entrée : " + key);
+                    } else {
 
-                    Long diffBetween = endLIne._dateTime.getTime() - deltaLine._startLineLog._dateTime.getTime();
-                    lineBuilder.append(key)
-                        .append(";")
-                        .append(dateFormat.format(deltaLine._startLineLog._dateTime.getTime()))
-                        .append(";")
-                        .append(String.valueOf(diffBetween));
-                    resultLines.add(lineBuilder.toString());
+                        Long diffBetween = endLIne._dateTime.getTime() - deltaLine._startLineLog._dateTime.getTime();
+                        lineBuilder.append(deltaLine._numcr).append(CSV_SEP).append(key)
+                                .append(CSV_SEP)
+                                .append(dateFormat.format(deltaLine._startLineLog._dateTime.getTime()))
+                                .append(CSV_SEP)
+                                .append(String.valueOf(diffBetween));
+                        resultLines.add(lineBuilder.toString());
+                    }
                 }
+
             }
 
+            // Enregistrement du resultat :
+            String fileName = "newsesame-back-web-delta-" + dayDirName + "-" + serviceJAVA + ".csv";
+
+            File fSaved = FileUtils.getFile(targetDir, fileName);
+            FileUtils.writeLines(fSaved, resultLines);
+            System.out.println(
+                    "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
+                            + " lines ");
+
+
         }
 
-        // Enregistrement du resultat :
-        String fileName = "newsesame-back-web-" + dayDirName + ".csv";
-        if(StringUtils.isNotEmpty(deltaTexte[0])){
-            fileName =
-                fileName.replaceFirst(".csv",
-                    "-delta-" + deltaTexte[0].replaceAll(" ", "-").replaceAll(":", "").replaceAll("/", "_") + ".csv");
-        }
-        File fSaved = FileUtils.getFile(targetDir, fileName);
-        FileUtils.writeLines(fSaved, resultLines);
-        System.out.println(
-            "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
-                + " lines ");
 
     }
 
@@ -600,28 +600,28 @@ public class Application{
         Date preTime = null;
         boolean goodLine = true;
 
-        if(extractTexte != null && extractTexte.length > 0){
+        if (extractTexte != null && extractTexte.length > 0) {
             goodLine = false;
         }
-        for(String line : lines){
+        for (String line : lines) {
 
             //extractFinaxyCSV(nlines, file, line);
             Date dateLine = matchDateLine(line);
-            if(!line.contains("pacifica.ns.web.filter.LoggingFilter  -  -  - GET /health-checks")){
-                if(dateLine != null){
+            if (!line.contains("pacifica.ns.web.filter.LoggingFilter  -  -  - GET /health-checks")) {
+                if (dateLine != null) {
                     preTime = dateLine;
-                    if(extractTexte != null && extractTexte.length > 0){
+                    if (extractTexte != null && extractTexte.length > 0) {
                         goodLine = false;
-                        for(String extract : extractTexte){
-                            if(line.contains(extract)){
+                        for (String extract : extractTexte) {
+                            if (line.contains(extract)) {
                                 goodLine = true;
                             }
                         }
                     }
-                }else {
+                } else {
                     dateLine = preTime;
                 }
-                if(goodLine){
+                if (goodLine) {
                     nlines.add(new LineLog(dateLine, line, file.getParentFile().getName()));
 
                 }
@@ -633,20 +633,20 @@ public class Application{
     private void extractFinaxyCSV(List<LineLog> nlines, File file, String line) {
         /** Read Payload SOAP FINAXY for extract Users ans profile. **/
 
-        if(line.startsWith("Payload: ")){
+        if (line.startsWith("Payload: ")) {
             StringBuilder bLine = new StringBuilder();
             // User :
             bLine.append(extractXmlValueFromString(line, "<desk>", 3))
-                .append(CSV_SEP)
-                .append(extractXmlValueFromString(line, "<identificationNumber>", 7))
-                .append(CSV_SEP)
-                .append(extractXmlValueFromString(line, "<profile>", 3))
-                .append(CSV_SEP)
-                .append(extractXmlValuesFromString(line, "<product><code>", 2))
-                .append(CSV_SEP);
+                    .append(CSV_SEP)
+                    .append(extractXmlValueFromString(line, "<identificationNumber>", 7))
+                    .append(CSV_SEP)
+                    .append(extractXmlValueFromString(line, "<profile>", 3))
+                    .append(CSV_SEP)
+                    .append(extractXmlValuesFromString(line, "<product><code>", 2))
+                    .append(CSV_SEP);
 
             String finaxyLine = bLine.toString();
-            if(finaxyLine.length() > 7){
+            if (finaxyLine.length() > 7) {
                 nlines.add(new LineLog(new Date(), finaxyLine, file.getParentFile().getName()));
             }
 
@@ -657,9 +657,9 @@ public class Application{
         int indexNodeName = xml.lastIndexOf(nodeName);
         int startNodeValue = indexNodeName + nodeName.length();
         int endNodeValue = startNodeValue + size;
-        if(indexNodeName > 1 && xml.length() > endNodeValue){
+        if (indexNodeName > 1 && xml.length() > endNodeValue) {
             return xml.substring(startNodeValue, endNodeValue);
-        }else {
+        } else {
             return "";
         }
     }
@@ -668,10 +668,10 @@ public class Application{
         String[] indexNodeName = xml.split(nodeName);
         StringBuilder codeProduits = new StringBuilder();
 
-        for(int i = 1; i < indexNodeName.length; i++){
+        for (int i = 1; i < indexNodeName.length; i++) {
             codeProduits.append(indexNodeName[i].substring(0, size)).append(",");
         }
-        codeProduits.append(CSV_SEP).append(indexNodeName.length -1);
+        codeProduits.append(CSV_SEP).append(indexNodeName.length - 1);
         return codeProduits.toString();
     }
 
@@ -697,7 +697,7 @@ public class Application{
         cleanUri = cleanUri.replaceFirst("\\d{10,40}", "#####");
 
         // Referentiel véhicule :
-        if(cleanUri.contains("/referentiel/marques")){
+        if (cleanUri.contains("/referentiel/marques")) {
             cleanUri = cleanUri.replaceAll("[/][A-Z]{2}[/]", "/{CODE}/");
             cleanUri = cleanUri.replaceAll("[/]\\d{2}[/]", "/{CODE}/");
         }
@@ -714,7 +714,7 @@ public class Application{
     String cleanUriAfterSequence(String uri, String seq) {
         String cleanUri = uri;
         int indexSeq = uri.lastIndexOf(seq);
-        if(indexSeq > 0){
+        if (indexSeq > 0) {
             cleanUri = uri.substring(0, indexSeq + seq.length()) + "#";
         }
         return cleanUri;
@@ -723,7 +723,7 @@ public class Application{
     /**
      * Object representant une ligne de log pour permettre le tri par date
      */
-    class LineLog implements Comparable<LineLog>{
+    class LineLog implements Comparable<LineLog> {
 
         LineLog(Date dateTime, String line, String folder) {
 
@@ -733,7 +733,7 @@ public class Application{
 
         }
 
-        Date   _dateTime;
+        Date _dateTime;
         String _line;
         String _folder;
 
@@ -753,15 +753,19 @@ public class Application{
     /**
      * Objet permettant de stocker des lignes concernant un evenement.
      */
-    class DeltaLine{
+    class DeltaLine {
 
-        DeltaLine(LineLog startLineLog) {
+        DeltaLine(String numcr, LineLog startLineLog) {
             _startLineLog = startLineLog;
+            _numcr = numcr;
+
         }
 
         public void putEndLogLine(LineLog endLineLog) {
             nextSessionEndLineLog.add(endLineLog);
         }
+
+        String _numcr;
 
         LineLog _startLineLog;
 
