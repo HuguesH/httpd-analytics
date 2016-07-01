@@ -22,7 +22,7 @@ public class ApplicationTest{
             FileUtils.listFiles(app.backupDir, FileFilterUtils.prefixFileFilter(prefixFileName),
                 FileFilterUtils.directoryFileFilter());
 
-        Queue<String> users = new LinkedList<String>();
+        HashSet<String> users = new HashSet<String>();
 
         List<String> nlines = new ArrayList<String>();
 
@@ -36,9 +36,11 @@ public class ApplicationTest{
                     lineWarn = line;
                 }
                 if(line.contains("Début appel du service [MPERS01")){
-                    nlines.add(lineWarn + app.CSV_SEP + line);
-                    users.add(line.split(" - ")[1]);
-                    lineWarn = " - ; - ; ";
+                    if(lineWarn != " - ; - ; "){
+                        nlines.add(lineWarn + app.CSV_SEP + line);
+                        users.add(line.split(" - ")[1]);
+                        lineWarn = " - ; - ; ";
+                    }
                 }
 
             }
