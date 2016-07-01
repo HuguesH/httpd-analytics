@@ -50,7 +50,7 @@ public class Application{
      */
     String
         columnName =
-        "Jour;Heure;HttpStatus;Duree;Bytes;IP;Method;Host;URI;QueryParams;JsessionId;Cookie;serveur;service;cleanURI;type;HH";
+        "Jour;Heure;HttpStatus;Duree;Bytes;IP;Method;Host;URI;QueryParams;JsessionId;Cookie;serveur;service;cleanURI;type;HH:M";
 
 
     public static void main(String[] args) {
@@ -63,9 +63,8 @@ public class Application{
             options.addOption("d", "copyHttpPhpLog", false, "download log to local directory");
             options.addOption("a", "access", false, "aggregate httpd access log and add stats columns");
             options.addOption("w", "backweb", false, "aggregate backweb log ");
-            options.addOption(
-                Option.builder("t").longOpt("tomcat").hasArg().argName("filter").desc("aggregate tomcat log").build());
-            options.getOption("t").hasArg();
+            options.addOption(Option.builder("t").longOpt("tomcat").hasArgs().argName("filter").desc("aggregate tomcat log").build());
+            options.getOption("t").hasArgs();
 
             options.addOption("s", "stats", false, "aggregate httpd stats all days");
             options.addOption("b", "between", false,
@@ -148,7 +147,7 @@ public class Application{
 
             // Genere un fichier global pour travailler sur toutes les stats en même temps.
             if(line.hasOption("s")){
-                application.aggregateAllAccessLogHttpd();
+                application.aggregateAllWithPrefix("aggrega-access-clean");
             }
 
         }catch(Exception e){
@@ -224,11 +223,11 @@ public class Application{
      *
      * @throws IOException
      */
-    void aggregateAllAccessLogHttpd() throws IOException {
+    void aggregateAllWithPrefix(String prefixFileName) throws IOException {
 
         Collection<File>
             files =
-            FileUtils.listFiles(backupDir, FileFilterUtils.prefixFileFilter("aggrega-access-clean"),
+            FileUtils.listFiles(backupDir, FileFilterUtils.prefixFileFilter(prefixFileName),
                 FileFilterUtils.directoryFileFilter());
 
         List<String> nlines = new ArrayList<String>();
@@ -241,7 +240,7 @@ public class Application{
 
         }
 
-        File fSaved = FileUtils.getFile(backupDir, "aggrega-access-all.csv");
+        File fSaved = FileUtils.getFile(backupDir, prefixFileName + "-all.csv");
         FileUtils.writeLines(fSaved, nlines);
         System.out.println(
             "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
@@ -362,8 +361,8 @@ public class Application{
                     strBuild.append(cleanUri(cLine[8])).append(CSV_SEP);
                     // Ajout type ressource Http
                     strBuild.append(typeUri(cLine[8])).append(CSV_SEP);
-                    // Ajout de l'Heure pour contrler le flux dans la suite de la journée.
-                    strBuild.append(cLine[1].substring(0, 2)).append(CSV_SEP);
+                    // Ajout de l'Heure par tranche de 10 Min pour controler les dans le courant d'une journée.
+                    strBuild.append(cLine[1].substring(0, 4)).append("0").append(CSV_SEP);
 
                     nlines.add(strBuild.toString());
                 }
@@ -383,16 +382,11 @@ public class Application{
         String[] uriDirs = uri.split("/");
         StringBuilder typeB = new StringBuilder();
         if(uriDirs.length >1 ){
-            typeB.append(uriDirs[1]).append("/");
-        }
-        if(uriDirs.length > 2 ){
-
-            if(uriDirs[2].startsWith("0.")){
-                typeB.append("static");
-            }else{
-                typeB.append(uriDirs[2]);
+            String type = uriDirs[1];
+            if("newsesame-adsu".equalsIgnoreCase(type) ){
+                type = "newsesame-back-web";
             }
-
+            typeB.append(type).append("/");
         }
         return typeB.toString();
     }
