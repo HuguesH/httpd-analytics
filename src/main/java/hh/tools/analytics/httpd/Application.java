@@ -11,6 +11,7 @@ import org.apache.commons.cli.*;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.FileFilterUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.http.HttpStatus;
 
 import hh.tools.file.ZipUtils;
 
@@ -50,7 +51,7 @@ public class Application{
      */
     String
         columnName =
-        "Jour;Heure;HttpStatus;Duree;Bytes;IP;Method;Host;URI;QueryParams;JsessionId;Cookie;serveur;service;cleanURI;type;HH:M";
+        "Jour;Heure;HttpStatus;Duree;Bytes;IP;Method;Host;URI;QueryParams;JsessionId;Cookie;serveur;service;cleanURI;type;OK;actions;HH:M";
 
 
     public static void main(String[] args) {
@@ -63,7 +64,8 @@ public class Application{
             options.addOption("d", "copyHttpPhpLog", false, "download log to local directory");
             options.addOption("a", "access", false, "aggregate httpd access log and add stats columns");
             options.addOption("w", "backweb", false, "aggregate backweb log ");
-            options.addOption(Option.builder("t").longOpt("tomcat").hasArgs().argName("filter").desc("aggregate tomcat log").build());
+            options.addOption(
+                Option.builder("t").longOpt("tomcat").hasArgs().argName("filter").desc("aggregate tomcat log").build());
             options.getOption("t").hasArgs();
 
             options.addOption("s", "stats", false, "aggregate httpd stats all days");
@@ -140,9 +142,8 @@ public class Application{
 
             // Aggrege toutes les LOG Tomcat dans un fichier trié par date
             if(line.hasOption("d")){
-                application.deltaDayBackEndLog(
-                    new String[]{"AIGUILLAGE # Formatted URL : /frontend/dossier-client/",
-                        "POST /api/dossierclient/_list : 200"});
+                application.deltaDayBackEndLog(new String[]{"AIGUILLAGE # Formatted URL : /frontend/dossier-client/",
+                    "POST /api/dossierclient/_list : 200"});
             }
 
             // Genere un fichier global pour travailler sur toutes les stats en même temps.
@@ -289,7 +290,7 @@ public class Application{
             for(File file : filesTxt){
                 int dayPos = file.getAbsolutePath().indexOf(sasLogDirDay.getName());
                 File copyDir = new File(targetDir + "/" + file.getParent().substring(dayPos));
-                FileUtils.copyFileToDirectory(file,copyDir);
+                FileUtils.copyFileToDirectory(file, copyDir);
 
             }
         }
@@ -361,6 +362,9 @@ public class Application{
                     strBuild.append(cleanUri(cLine[8])).append(CSV_SEP);
                     // Ajout type ressource Http
                     strBuild.append(typeUri(cLine[8])).append(CSV_SEP);
+                    // Ajout sous Type
+                    strBuild.append(sousType(cLine)).append(CSV_SEP);
+
                     // Ajout de l'Heure par tranche de 10 Min pour controler les dans le courant d'une journée.
                     strBuild.append(cLine[1].substring(0, 4)).append("0").append(CSV_SEP);
 
@@ -378,12 +382,48 @@ public class Application{
 
     }
 
+    private String sousType(String[] cLine) {
+        int status = Integer.valueOf(cLine[2]);
+        String verb = cLine[6];
+        String sousType = "-";
+        if(status == HttpStatus.SC_OK || status == HttpStatus.SC_NO_CONTENT || status == HttpStatus.SC_NOT_MODIFIED
+            || status == HttpStatus.SC_NOT_FOUND || status == HttpStatus.SC_PARTIAL_CONTENT){
+            if("GET".equalsIgnoreCase(verb)){
+                sousType = "OK;Consultation";
+            }else if("POST".equalsIgnoreCase(verb)){
+                sousType = "OK;Modification";
+            }
+        }else if(status == HttpStatus.SC_CREATED){
+            sousType = "OK;Creation";
+        }else if( 399 < status && status < 499){
+            if("GET".equalsIgnoreCase(verb)){
+                sousType = "KO Fonctionnelle;Consultation";
+            }else if("POST".equalsIgnoreCase(verb)){
+                sousType = "KO Fonctionnelle;Modification/Creation";
+            }
+
+        }else if(499 < status ){
+            if("GET".equalsIgnoreCase(verb)){
+                sousType = "KO Technique;Consultation";
+            }else if("POST".equalsIgnoreCase(verb)){
+                sousType = "KO Technique;Modification/Creation";
+            }
+
+
+        }else {
+            System.out.println("Attention status code non identifié pour le stats :" + status);
+        }
+
+        return sousType;
+
+    }
+
     private String typeUri(String uri) {
         String[] uriDirs = uri.split("/");
         StringBuilder typeB = new StringBuilder();
-        if(uriDirs.length >1 ){
+        if(uriDirs.length > 1){
             String type = uriDirs[1];
-            if("newsesame-adsu".equalsIgnoreCase(type) ){
+            if("newsesame-adsu".equalsIgnoreCase(type)){
                 type = "newsesame-back-web";
             }
             typeB.append(type).append("/");
@@ -669,7 +709,7 @@ public class Application{
         for(int i = 1; i < indexNodeName.length; i++){
             codeProduits.append(indexNodeName[i].substring(0, size)).append(",");
         }
-        codeProduits.append(CSV_SEP).append(indexNodeName.length -1);
+        codeProduits.append(CSV_SEP).append(indexNodeName.length - 1);
         return codeProduits.toString();
     }
 

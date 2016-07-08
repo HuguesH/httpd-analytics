@@ -2,7 +2,10 @@ package hh.tools.analytics.httpd;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.FileFilterUtils;
@@ -22,45 +25,58 @@ public class ApplicationTest{
             FileUtils.listFiles(app.backupDir, FileFilterUtils.prefixFileFilter(prefixFileName),
                 FileFilterUtils.directoryFileFilter());
 
-        HashSet<String> users = new HashSet<String>();
+        HashMap<String, String> users = new HashMap<String, String>();
 
         List<String> nlines = new ArrayList<String>();
 
-        String  lineWarn = " - ; - ; ";
+
         for(File file : files){
             System.out.println(" Find log file  " + file.getAbsolutePath());
 
+            String accesApplicationVide = "false";
             List<String> lines = FileUtils.readLines(file);
             for(String line : lines){
                 if(line.contains("IdentifiantAcces du CTXAccesApplication")){
-                    lineWarn = line;
+                    accesApplicationVide = "true";
                 }
                 if(line.contains("Début appel du service [MPERS01")){
-                    if(lineWarn != " - ; - ; "){
-                        nlines.add(lineWarn + app.CSV_SEP + line);
-                        users.add(line.split(" - ")[1]);
-                        lineWarn = " - ; - ; ";
+                    String[] splitLine = line.split(" - ");
+                    //Cle numcr;user issue des log OPEN
+                    String crEtUser = splitLine[0].substring(splitLine[0].length() - 5) + ";" + splitLine[1];
+                    //Utilisateur connu
+                    String userAccesApplication = accesApplicationVide;
+                    if("true".equals(userAccesApplication)){
+                        //Ce user est connu, Cool
+                        if(users.get(crEtUser) != null){
+                            if(!users.get(crEtUser).equals(accesApplicationVide)){
+                                System.out.println(" !!  Bizarre 2 comportements différents pour le User " + crEtUser);
+                                userAccesApplication = "mixte";
+                            }
+                        }
                     }
+                    users.put(crEtUser, userAccesApplication);
+                    //remise à blanc de la valeur par defaut
+                    accesApplicationVide = "false";
                 }
-
             }
-
         }
 
 
+        nlines.add("numCr;user;CTXAccesApplication");
+        for(String userName : users.keySet()){
+            nlines.add(userName + ";" + users.get(userName));
+        }
 
 
-        File fSaved = FileUtils.getFile(app.backupDir, prefixFileName + "list.csv");
+        File fSaved = FileUtils.getFile(app.backupDir, prefixFileName + "list-users.csv");
         FileUtils.writeLines(fSaved, nlines);
         System.out.println(
             "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
                 + " lines ");
 
-        System.out.println("Identification de : "+ String.valueOf(users.size()) );
+        System.out.println("Identification d'un total de users  :  " + String.valueOf(users.size()));
 
     }
-
-
 
 
 }
