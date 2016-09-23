@@ -3,6 +3,7 @@ package hh.tools.file;
 import java.io.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
 
 /**
  * Created by Hugues on 23/03/2016.
@@ -13,6 +14,41 @@ public class ZipUtils {
      * Size of the buffer to read/write data
      */
     private static final int BUFFER_SIZE = 4096;
+
+    /**
+     * This method compresses the single file to zip format
+     * @param file
+     * @param zipFileName
+     */
+    public void zipSingleFile(File file, String zipFileName) {
+        try {
+            //create ZipOutputStream to write to the zip file
+            FileOutputStream fos = new FileOutputStream(zipFileName);
+            ZipOutputStream zos = new ZipOutputStream(fos);
+            //add a new Zip Entry to the ZipOutputStream
+            ZipEntry ze = new ZipEntry(file.getName());
+            zos.putNextEntry(ze);
+            //read the file and write to ZipOutputStream
+            FileInputStream fis = new FileInputStream(file);
+            byte[] buffer = new byte[1024];
+            int len;
+            while ((len = fis.read(buffer)) > 0) {
+                zos.write(buffer, 0, len);
+            }
+
+            //Close the zip entry to write to zip file
+            zos.closeEntry();
+            //Close resources
+            zos.close();
+            fis.close();
+            fos.close();
+            System.out.println(file.getCanonicalPath()+" is zipped to "+zipFileName);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
 
     /**
      * Extracts a zip file specified by the zipFilePath to a directory specified by destDirectory
