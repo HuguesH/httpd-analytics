@@ -10,6 +10,7 @@ import java.util.*;
 import org.apache.commons.cli.*;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.FileFilterUtils;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpStatus;
 
@@ -49,9 +50,10 @@ public class Application{
      * LogFormat "%{%Y-%m-%d}t;%{%H:%M:%S}t;%s;%D;%b;%h;%m;%{Host}i;%U;%q;%{JSESSIONID}C;%{Cookie}n"
      * common
      */
-    String
-        columnName =
-        "Jour;Heure;HttpStatus;Duree;Bytes;IP;Method;Host;URI;QueryParams;JsessionId;Cookie;serveur;service;cleanURI;type;OK;actions;HH:M";
+    static final String[] columnsName= new String[]{"day", "hour", "response_status", "time_taken_serve", "response_bytes", "remote_adress", "request_verb", "request_host", "request_path", "request_params", "request_sessionid", "request_cookie", "server_name", "service_web", "request_clean_path", "request_type","OK", "actions", "day_minutes" };
+
+
+
 
 
     public static void main(String[] args) {
@@ -332,7 +334,8 @@ public class Application{
                 FileFilterUtils.directoryFileFilter());
 
         List<String> nlines = new ArrayList<String>();
-        nlines.add(columnName.toString().replace(',', ';'));
+        String csvHeader = ArrayUtils.toString(columnsName);
+        nlines.add(csvHeader.replaceAll(",",";").substring(1,csvHeader.length() -1));
 
         for(File file : files){
             System.out.println(" Find access file  " + file.getAbsolutePath());
