@@ -16,7 +16,8 @@ import org.junit.Test;
  */
 public class ApplicationTest{
 
-    @Test public void extractUsersInParams() throws IOException {
+
+    public void extractUsersInParams() throws IOException {
         Application app = new Application(0, "newsesame_prod.properties");
         String prefixFileName = "BE_CA_TC-newsesame-back-web-";
 
@@ -78,5 +79,97 @@ public class ApplicationTest{
 
     }
 
+    /**
+     * Anomalie Production bascule SEA vers SIMM
+     */
+    public void extractFonctionnalEventSimm() throws  Exception{
+        Collection<File>
+            files =
+            FileUtils.listFiles(new File("C:\\PTOD\\temp\\logs\\prod"), FileFilterUtils.suffixFileFilter("filter-Flux-difuse-au-poste-distributeur.txt"),
+                FileFilterUtils.directoryFileFilter());
 
+        List<String> nlines = new ArrayList<String>();
+        //Ajout du HEADER CSV
+        nlines.add("Timestamp;Num CR;User;CorrelationId;Reference Archivage;Reference bancaire;Numero dossier;Numero sous dossier;Code groupe document;Identifiant protocole concentement");
+
+        for(File file : files){
+            System.out.println(" Find log file :" + file.getAbsolutePath());
+
+            List<String> lines = FileUtils.readLines(file);
+            for(String line : lines){
+                //OUPS c'est le flux SIMM :
+                if (line.contains("<donneesLancementSignature><identifiantOperationDemandeur>")){
+                    String[] ttab = line.split(" - ");
+                    if(ttab.length > 4  ){
+                        System.out.println(" WARN log line contain 4 ' - ' ");
+                    }
+                    StringBuilder csvLine = new StringBuilder();
+                    csvLine.append(Application.extractXmlValueFromString(ttab[3],"<dateHeureFinValidite>",29)).append(Application.CSV_SEP);
+                    csvLine.append(ttab[0].substring(ttab[0].length() -5 )).append(Application.CSV_SEP);
+                    csvLine.append(ttab[1]).append(Application.CSV_SEP);
+                    csvLine.append(ttab[2]).append(Application.CSV_SEP);
+                    csvLine.append(Application.extractXmlValuesFromString(ttab[3],"<identifiantOperationDemandeur>")).append(Application.CSV_SEP);
+                    csvLine.append(Application.extractXmlValuesFromString(ttab[3],"<identifiantPartenaireSignataire>")).append(Application.CSV_SEP);
+                    csvLine.append(Application.extractXmlValuesFromString(ttab[3],"<numeroDossier>")).append(Application.CSV_SEP);
+                    csvLine.append(Application.extractXmlValuesFromString(ttab[3],"<numeroSousDossier>")).append(Application.CSV_SEP);
+                    csvLine.append(Application.extractXmlValuesFromString(ttab[3],"<codeGroupeDocument>")).append(Application.CSV_SEP);
+                    csvLine.append(Application.extractXmlValuesFromString(ttab[3],"<identifiantProtocoleConsentement>")).append(Application.CSV_SEP);
+                    nlines.add(csvLine.toString());
+
+                }
+            }
+        }
+        File fSaved = FileUtils.getFile("C:\\PTOD\\temp\\logs\\prod", "flux-SIMM-production.csv");
+        FileUtils.writeLines(fSaved, nlines);
+        System.out.println(
+            "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
+                + " lines ");
+    }
+
+
+    /**
+     * Anomalie Production bascule SEA vers SIMM
+     */
+
+    @Test
+    public void extractTechnicalErrorCEM() throws  Exception{
+
+        Collection<File>
+            files =
+            FileUtils.listFiles(new File("C:\\PTOD\\temp\\logs\\prod\\20161005"), new String[]{"txt"},
+                true);
+
+        List<String> nlines = new ArrayList<String>();
+        //Ajout du HEADER CSV
+        nlines.add("Timestamp;Num CR;User;CorrelationId;");
+
+        for(File file : files){
+            System.out.println(" Find log file :" + file.getAbsolutePath());
+
+            String day = file.getName().substring(19,29);
+
+            List<String> lines = FileUtils.readLines(file);
+            for(String line : lines){
+                //Cette ligne d'erreur n'est pas sufisante, elle ne couvre pas les cas renconrés pour le moment.
+                if (line.contains(" : 500")){
+                    String[] ttab = line.split(" - ");
+                    if(ttab.length > 4  ){
+                        System.out.println(" WARN log line contain 4 ' - ' ");
+                    }
+                    StringBuilder csvLine = new StringBuilder();
+                    csvLine.append(day).append("-").append(ttab[0].substring(0,12)).append(Application.CSV_SEP);
+                    csvLine.append(ttab[0].substring(ttab[0].length() -5 )).append(Application.CSV_SEP);
+                    csvLine.append(ttab[1]).append(Application.CSV_SEP);
+                    csvLine.append(ttab[2]).append(Application.CSV_SEP);
+                    nlines.add(csvLine.toString());
+
+                }
+            }
+        }
+        File fSaved = FileUtils.getFile("C:\\PTOD\\temp\\logs\\prod", "500-production-2016-09-29.csv");
+        FileUtils.writeLines(fSaved, nlines);
+        System.out.println(
+            "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
+                + " lines ");
+    }
 }

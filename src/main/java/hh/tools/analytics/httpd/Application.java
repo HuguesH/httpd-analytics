@@ -694,7 +694,7 @@ public class Application{
         }
     }
 
-    String extractXmlValueFromString(String xml, String nodeName, int size) {
+    static String extractXmlValueFromString(String xml, String nodeName, int size) {
         int indexNodeName = xml.lastIndexOf(nodeName);
         int startNodeValue = indexNodeName + nodeName.length();
         int endNodeValue = startNodeValue + size;
@@ -705,7 +705,23 @@ public class Application{
         }
     }
 
-    String extractXmlValuesFromString(String xml, String nodeName, int size) {
+    static String extractXmlValuesFromString(String xml, String nodeName) {
+        String[] tabNode = xml.split(escapeXmlCaracteres(nodeName));
+        String values = "";
+        for(int a =2; a < tabNode.length; a = a+2){
+            if(values.length()>0){
+                values = values + "|";
+            }
+            values = values + escapeXmlCaracteres(tabNode[a-1]);
+        }
+        return values;
+    }
+
+    static String escapeXmlCaracteres(String xml){
+        return xml.replaceAll("<","").replaceAll("/","").replaceAll(">","");
+    }
+
+    static String extractXmlValuesFromString(String xml, String nodeName, int size) {
         String[] indexNodeName = xml.split(nodeName);
         StringBuilder codeProduits = new StringBuilder();
 
