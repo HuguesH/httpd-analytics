@@ -1,12 +1,6 @@
 package hh.tools.analytics.httpd;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.*;
-
+import hh.tools.file.ZipUtils;
 import org.apache.commons.cli.*;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.FileFilterUtils;
@@ -14,7 +8,14 @@ import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpStatus;
 
-import hh.tools.file.ZipUtils;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Created by Hugues on 07/03/2016.
@@ -477,7 +478,11 @@ public class Application{
             List<LineLog> nlines = new ArrayList<LineLog>();
             for(File file : files){
                 if(file.getPath().contains(serviceJAVA)){
-                    filterTomcatLogLines(extractTexte, nlines, file);
+                    if(extractTexte.length == 1) {
+                        filterTomcatLogLinesWithExpression(extractTexte[0], nlines, file);
+                    }else{
+                        filterTomcatLogLines(extractTexte, nlines,file);
+                    }
                 }
             }
             writeBackEndAgregateLines(logName, serviceJAVA, extractTexte, nlines);
@@ -622,6 +627,47 @@ public class Application{
             "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
                 + " lines ");
 
+    }
+
+    void filterTomcatLogLinesWithExpression(String regexp, List<LineLog> nlines, File file)throws IOException {
+        System.out.println(" Find newsesame log file  " + file.getAbsolutePath());
+        List<String> lines = FileUtils.readLines(file);
+
+        Date preTime = null;
+        boolean goodLine = true;
+
+        Pattern pattern = null;
+
+        if(regexp != null && regexp.length() > 0){
+            goodLine = false;
+            pattern = Pattern.compile(regexp);
+        }
+
+        for(String line : lines){
+
+            //extractFinaxyCSV(nlines, file, line);
+            Date dateLine = matchDateLine(line);
+            if(!line.contains("pacifica.ns.web.filter.LoggingFilter  -  -  - GET /health-checks")){
+                if(dateLine != null){
+                    preTime = dateLine;
+                    if(regexp != null && regexp.length() > 0) {
+                        goodLine = false;
+
+                        Matcher matcher = pattern.matcher(line);
+                        if (matcher.find()) {
+                            goodLine = true;
+                        }
+                    }
+                }else {
+                    dateLine = preTime;
+                }
+                if(goodLine){
+                    nlines.add(new LineLog(dateLine, line, file.getParentFile().getName()));
+
+                }
+            }
+
+        }
     }
 
 
