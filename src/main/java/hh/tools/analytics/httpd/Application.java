@@ -30,6 +30,8 @@ public class Application{
 
     static final SimpleDateFormat dayLogsFormat = new SimpleDateFormat("YYYYMMdd");
 
+    String appEnvrionnementFileName;
+
     File saslogDir;
 
     File targetDir;
@@ -205,6 +207,8 @@ public class Application{
         InputStream inputStream = getClass().getClassLoader().getResourceAsStream(propertiesFileName);
         prop.load(inputStream);
 
+        this.appEnvrionnementFileName = propertiesFileName.split("/.")[0];
+
         this.saslogDir = new File(prop.getProperty("saslog.dir"));
         System.out.println("SASLOG  DIR : " + saslogDir);
         this.targetDir = new File(prop.getProperty("target.dir"));
@@ -244,7 +248,7 @@ public class Application{
 
         }
 
-        File fSaved = FileUtils.getFile(backupDir, prefixFileName + "-all.csv");
+        File fSaved = FileUtils.getFile(backupDir, appEnvrionnementFileName + "-" + prefixFileName + "-all.csv");
         FileUtils.writeLines(fSaved, nlines);
         System.out.println(
             "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
@@ -378,7 +382,7 @@ public class Application{
 
         }
 
-        File fSaved = FileUtils.getFile(backupDir, "aggrega-access-clean-" + dayDirName + ".csv");
+        File fSaved = FileUtils.getFile(backupDir, appEnvrionnementFileName + "-" + "aggrega-access-clean-" + dayDirName + ".csv");
         FileUtils.writeLines(fSaved, nlines);
         System.out.println(
             "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
@@ -505,11 +509,11 @@ public class Application{
             Collections.sort(nlines);
 
             // Enregistrement du resultat :
-            StringBuilder buildFileName = new StringBuilder(serviceTomcat).append("-");
+            StringBuilder buildFileName = new StringBuilder(appEnvrionnementFileName).append("-").append(serviceTomcat).append("-");
             buildFileName.append(logName).append("-").append(dayDirName);
             if(extractTexte != null && extractTexte.length > 0){
                 buildFileName.append("-filter-")
-                    .append(extractTexte[0].replaceAll(" ", "-").replaceAll(":", "").replaceAll("/", "_"));
+                    .append(extractTexte[0].replaceAll(" ", "-").replaceAll(":", "").replaceAll("/", "_").replaceAll("\\\\",""));
             }
             buildFileName.append(".txt");
             File fSaved = FileUtils.getFile(targetDir, buildFileName.toString());

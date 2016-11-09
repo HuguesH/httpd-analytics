@@ -19,7 +19,7 @@ public class ApplicationTest{
 
     public void extractUsersInParams() throws IOException {
         Application app = new Application(0, "newsesame_prod.properties");
-        String prefixFileName = "BE_CA_TC-newsesame-back-web-";
+        String prefixFileName = "newsesame_prod.properties-BE_";
 
         Collection<File>
             files =
@@ -77,6 +77,54 @@ public class ApplicationTest{
 
         System.out.println("Identification d'un total de users  :  " + String.valueOf(users.size()));
 
+    }
+
+    /**
+     * Anomalie Production bascule SEA vers SIMM
+     */
+    @Test
+    public void extractContratMamanEvent() throws  Exception{
+        Collection<File>
+            files =
+            FileUtils.listFiles(new File("C:\\PTOD\\temp\\logs\\prod"), FileFilterUtils.suffixFileFilter("_contrat--201.txt"),
+                FileFilterUtils.directoryFileFilter());
+
+        List<String> nlines = new ArrayList<String>();
+        //Ajout du HEADER CSV
+        nlines.add("Timestamp;Reseau Distrb.;Num CR;User;CorrelationId;produit");
+
+        for(File file : files){
+            System.out.println(" Find log file :" + file.getAbsolutePath());
+
+            int dateStarted = file.getName().indexOf("newsesame-back-web-") + 19 ;
+            String date = file.getName().substring(dateStarted,dateStarted + 8 );
+            String reseau = file.getName().substring(dateStarted - 19 -6 , dateStarted - 19 -4);
+
+            List<String> lines = FileUtils.readLines(file);
+            for(String line : lines){
+                //OUPS c'est le flux SIMM :
+                if (line.contains(": 201 |")){
+                    String[] ttab = line.split(" - ");
+                    if(ttab.length > 4  ){
+                        System.out.println(" WARN log line contain 4 ' - ' ");
+                    }
+                    StringBuilder csvLine = new StringBuilder();
+                    csvLine.append(date).append("-").append(ttab[0].substring(0,12)).append(Application.CSV_SEP);
+                    csvLine.append(reseau).append(Application.CSV_SEP);
+                    csvLine.append(ttab[0].substring(ttab[0].length() -5 )).append(Application.CSV_SEP);
+                    csvLine.append(ttab[1]).append(Application.CSV_SEP);
+                    csvLine.append(ttab[2]).append(Application.CSV_SEP);
+                    csvLine.append(ttab[3].substring(10,12));
+                    nlines.add(csvLine.toString());
+
+                }
+            }
+        }
+        File fSaved = FileUtils.getFile("C:\\PTOD\\temp\\logs\\prod", "STATS-Contrats-NS-production.csv");
+        FileUtils.writeLines(fSaved, nlines);
+        System.out.println(
+            "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
+                + " lines ");
     }
 
     /**
