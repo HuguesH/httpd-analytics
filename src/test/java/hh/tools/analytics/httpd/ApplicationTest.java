@@ -130,6 +130,55 @@ public class ApplicationTest{
     /**
      * Anomalie Production bascule SEA vers SIMM
      */
+    @Test
+    public void extractFonctionnalEventSea() throws  Exception{
+        Collection<File>
+                files =
+                FileUtils.listFiles(new File("C:\\PTOD\\temp\\logs\\prod"), FileFilterUtils.suffixFileFilter("filter-Flux-difuse-au-poste-distributeur.txt"),
+                        FileFilterUtils.directoryFileFilter());
+
+        List<String> nlines = new ArrayList<String>();
+        //Ajout du HEADER CSV
+        nlines.add("Timestamp;Num CR;User;CorrelationId;Reference Archivage;Reference bancaire;Numero dossier;Numero sous dossier;Code groupe document;Identifiant protocole concentement");
+
+        for(File file : files){
+            System.out.println(" Find log file :" + file.getAbsolutePath());
+
+            List<String> lines = FileUtils.readLines(file);
+            for(String line : lines){
+                //OUPS c'est le flux SIMM :
+                if (line.contains("<donneesLancementSignature><identifiantOperationDemandeur>")){
+                    String[] ttab = line.split(" - ");
+                    if(ttab.length > 4  ){
+                        System.out.println(" WARN log line contain 4 ' - ' ");
+                    }
+                    StringBuilder csvLine = new StringBuilder();
+                    csvLine.append(Application.extractXmlValueFromString(ttab[3],"<dateHeureFinValidite>",29)).append(Application.CSV_SEP);
+                    csvLine.append(ttab[0].substring(ttab[0].length() -5 )).append(Application.CSV_SEP);
+                    csvLine.append(ttab[1]).append(Application.CSV_SEP);
+                    csvLine.append(ttab[2]).append(Application.CSV_SEP);
+                    csvLine.append(Application.extractXmlValuesFromString(ttab[3],"<identifiantOperationDemandeur>")).append(Application.CSV_SEP);
+                    csvLine.append(Application.extractXmlValuesFromString(ttab[3],"<identifiantPartenaireSignataire>")).append(Application.CSV_SEP);
+                    csvLine.append(Application.extractXmlValuesFromString(ttab[3],"<numeroDossier>")).append(Application.CSV_SEP);
+                    csvLine.append(Application.extractXmlValuesFromString(ttab[3],"<numeroSousDossier>")).append(Application.CSV_SEP);
+                    csvLine.append(Application.extractXmlValuesFromString(ttab[3],"<codeGroupeDocument>")).append(Application.CSV_SEP);
+                    csvLine.append(Application.extractXmlValuesFromString(ttab[3],"<identifiantProtocoleConsentement>")).append(Application.CSV_SEP);
+                    nlines.add(csvLine.toString());
+
+                }
+            }
+        }
+        File fSaved = FileUtils.getFile("C:\\PTOD\\temp\\logs\\prod", "flux-SIMM-production.csv");
+        FileUtils.writeLines(fSaved, nlines);
+        System.out.println(
+                "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
+                        + " lines ");
+    }
+
+    /**
+     * Anomalie Production bascule SEA vers SIMM
+     */
+    @Test
     public void extractFonctionnalEventSimm() throws  Exception{
         Collection<File>
             files =
@@ -173,6 +222,52 @@ public class ApplicationTest{
             "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
                 + " lines ");
     }
+
+    @Test public void extractAiguilleurFonction() throws IOException{
+
+        Collection<File>
+                files =
+                FileUtils.listFiles(new File("C:\\PTOD\\temp\\logs\\prod"), FileFilterUtils.suffixFileFilter("filter-AIGUILLAGE-#-.txt"),
+                        FileFilterUtils.directoryFileFilter());
+
+        List<String> nlines = new ArrayList<String>();
+        //Ajout du HEADER CSV
+        nlines.add("Timestamp;Reseau Distrb.;Num CR;User;CorrelationId;AiguillageRule");
+
+        for(File file : files){
+            System.out.println(" Find log file :" + file.getAbsolutePath());
+
+            int dateStarted = file.getName().indexOf("newsesame-back-web-") + 19 ;
+            String date = file.getName().substring(dateStarted,dateStarted + 8 );
+            String reseau = file.getName().substring(dateStarted - 19 -6 , dateStarted - 19 -4);
+
+            List<String> lines = FileUtils.readLines(file);
+            for(String line : lines){
+                //OUPS c'est le flux SIMM :
+
+                    String[] ttab = line.split(" - ");
+                    if(ttab.length > 4  ){
+                        System.out.println(" WARN log line contain 4 ' - ' ");
+                    }
+                    StringBuilder csvLine = new StringBuilder();
+                    csvLine.append(date).append("-").append(ttab[0].substring(0,12)).append(Application.CSV_SEP);
+                    csvLine.append(reseau).append(Application.CSV_SEP);
+                    csvLine.append(ttab[0].substring(ttab[0].length() -5 )).append(Application.CSV_SEP);
+                    csvLine.append(ttab[1]).append(Application.CSV_SEP);
+                    csvLine.append(ttab[2]).append(Application.CSV_SEP);
+                    csvLine.append(ttab[3].substring(0,74));
+                    nlines.add(csvLine.toString());
+
+
+            }
+        }
+        File fSaved = FileUtils.getFile("C:\\PTOD\\temp\\logs\\prod", "STATS-Aiguillage-NS-production.csv");
+        FileUtils.writeLines(fSaved, nlines);
+        System.out.println(
+                "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
+                        + " lines ");
+    }
+
 
 
     /**
