@@ -767,6 +767,21 @@ public class Application{
         return values;
     }
 
+    static String extractXmlAttributeValueFrom(String xml, String attributeName, int sizeValue){
+        String[] tabNode = xml.split(attributeName);
+        String values = "";
+
+        for(int a =1 ; a < tabNode.length; a++){
+            if(values.length()>0){
+                values = values + "|";
+            }
+            values = values + tabNode[a].substring(1 + 1 ,sizeValue + 1 + 1);
+        }
+        return values;
+
+
+    }
+
     static String escapeXmlCaracteres(String xml){
         return xml.replaceAll("<","").replaceAll("/","").replaceAll(">","");
     }

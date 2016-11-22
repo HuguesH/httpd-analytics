@@ -86,7 +86,7 @@ public class ApplicationTest{
     public void extractContratMamanEvent() throws  Exception{
         Collection<File>
             files =
-            FileUtils.listFiles(new File("C:\\PTOD\\temp\\logs\\prod"), FileFilterUtils.suffixFileFilter("_contrat--201.txt"),
+            FileUtils.listFiles(new File("C:\\PTOD\\temp\\logs\\prod"), FileFilterUtils.suffixFileFilter("contrat--201.txt"),
                 FileFilterUtils.directoryFileFilter());
 
         List<String> nlines = new ArrayList<String>();
@@ -128,14 +128,14 @@ public class ApplicationTest{
     }
 
     /**
-     * Anomalie Production bascule SEA vers SIMM
+     * Statistiques production SEA
      */
     @Test
-    public void extractFonctionnalEventSea() throws  Exception{
+    public void extractFonctionnalEventSEA() throws  Exception{
         Collection<File>
-                files =
-                FileUtils.listFiles(new File("C:\\PTOD\\temp\\logs\\prod"), FileFilterUtils.suffixFileFilter("filter-Flux-difuse-au-poste-distributeur.txt"),
-                        FileFilterUtils.directoryFileFilter());
+            files =
+            FileUtils.listFiles(new File("C:\\PTOD\\temp\\logs\\prod"), FileFilterUtils.suffixFileFilter("filter-Flux-difuse-au-poste-distributeur.txt"),
+                FileFilterUtils.directoryFileFilter());
 
         List<String> nlines = new ArrayList<String>();
         //Ajout du HEADER CSV
@@ -157,28 +157,22 @@ public class ApplicationTest{
                     csvLine.append(ttab[0].substring(ttab[0].length() -5 )).append(Application.CSV_SEP);
                     csvLine.append(ttab[1]).append(Application.CSV_SEP);
                     csvLine.append(ttab[2]).append(Application.CSV_SEP);
-                    csvLine.append(Application.extractXmlValuesFromString(ttab[3],"<identifiantOperationDemandeur>")).append(Application.CSV_SEP);
-                    csvLine.append(Application.extractXmlValuesFromString(ttab[3],"<identifiantPartenaireSignataire>")).append(Application.CSV_SEP);
-                    csvLine.append(Application.extractXmlValuesFromString(ttab[3],"<numeroDossier>")).append(Application.CSV_SEP);
-                    csvLine.append(Application.extractXmlValuesFromString(ttab[3],"<numeroSousDossier>")).append(Application.CSV_SEP);
-                    csvLine.append(Application.extractXmlValuesFromString(ttab[3],"<codeGroupeDocument>")).append(Application.CSV_SEP);
-                    csvLine.append(Application.extractXmlValuesFromString(ttab[3],"<identifiantProtocoleConsentement>")).append(Application.CSV_SEP);
+                    //TODO lecture du flux adapte
                     nlines.add(csvLine.toString());
 
                 }
             }
         }
-        File fSaved = FileUtils.getFile("C:\\PTOD\\temp\\logs\\prod", "flux-SIMM-production.csv");
+        File fSaved = FileUtils.getFile("C:\\PTOD\\temp\\logs\\prod", "flux-SEA-production.csv");
         FileUtils.writeLines(fSaved, nlines);
         System.out.println(
-                "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
-                        + " lines ");
+            "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
+                + " lines ");
     }
 
     /**
      * Anomalie Production bascule SEA vers SIMM
      */
-    @Test
     public void extractFonctionnalEventSimm() throws  Exception{
         Collection<File>
             files =
@@ -277,8 +271,8 @@ public class ApplicationTest{
 
         List<String> nlines = new ArrayList<String>();
         //Ajout du HEADER CSV
-        nlines.add("Timestamp;Application Server;Num CR;User;SessionSag; CorrelationId; VNC;");
-        StringBuilder newLine = new StringBuilder();
+        nlines.add("Timestamp;Application Server;Num CR;User;SessionSag;IDPART;VNC");
+
 
         for(File file : files){
 
@@ -286,29 +280,48 @@ public class ApplicationTest{
                 // Cool fichier de log par caisse
                 System.out.println(" Find log file :" + file.getAbsolutePath());
                 String numcr = file.getName().substring(18,23);
-
                 String appServer = file.getParentFile().getName().replaceAll("\\d","#");
 
+                StringBuilder csvLine = null;
+                StringBuilder strCtxB = null;
                 List<String> lines = FileUtils.readLines(file);
                 for (String line : lines) {
-                    if(line.contains(";CONTEXTE r")){
+
+                    if(line.contains(";CONTEXTE r??u  :")){
                         //Timestamp
-                        newLine = new StringBuilder(line.substring(0,19).replaceAll(Application.CSV_SEP,"T").replaceAll("/","-")).append(Application.CSV_SEP);
-                        //AS et NUMCR
-                        newLine.append(appServer).append(Application.CSV_SEP).append(numcr).append(Application.CSV_SEP);
-                    }else{
-                        newLine.append(line.replaceAll(Application.CSV_SEP," ").replaceAll("  "," "));
+                        csvLine = new StringBuilder(line.substring(0,19).replaceAll(Application.CSV_SEP,"T").replaceAll("/","-"));
+
                     }
-                    if(line.contains("</VUENATIONALECONTEXTE>")){
-                        nlines.add(newLine.toString());
+
+                    if(line.contains("<VUENATIONALECONTEXTE>")){
+                        strCtxB = new StringBuilder();
+                    }
+
+                    // Entre ouverture  et fermeture du flux XML
+                    if(strCtxB!= null){
+                        strCtxB.append(line.replaceAll(Application.CSV_SEP," ").replaceAll("  "," "));
+                        //Fin de contexte,
+                        if(line.contains("</VUENATIONALECONTEXTE>")){
+                            //On doit pouvoir extraire des attributs XML :
+                            String strCtx = strCtxB.toString();
+                            strCtxB = null;
+
+                            //AS et NUMCR
+                            csvLine.append(Application.CSV_SEP).append(appServer).append(Application.CSV_SEP).append(numcr);
+                            csvLine.append(Application.CSV_SEP).append(Application.extractXmlAttributeValueFrom(strCtx,"identifiantAcces",7));
+                            csvLine.append(Application.CSV_SEP).append(Application.extractXmlAttributeValueFrom(strCtx,"idSessionSAG",33));
+                            csvLine.append(Application.CSV_SEP).append(Application.extractXmlAttributeValueFrom(strCtx,"IDPART",14));
+
+
+                            //Finallement on ajoute le XML :
+                            csvLine.append(Application.CSV_SEP).append(strCtx);
+                            nlines.add(csvLine.toString());
+                            csvLine = null;
+                        }
                     }
                 }
 
             }
-
-
-
-
 
         }
         File fSaved = FileUtils.getFile("C:\\PTOD\\temp\\logs\\prod", "STATS-SesameWeb-production.csv");
