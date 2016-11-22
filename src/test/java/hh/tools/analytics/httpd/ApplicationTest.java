@@ -268,6 +268,57 @@ public class ApplicationTest{
                         + " lines ");
     }
 
+    @Test
+    public void aggregateAndAnalyseADSUSWeb() throws IOException{
+        Collection<File>
+                files =
+                FileUtils.listFiles(new File("C:\\PTOD\\temp\\logs\\prod\\20161103"),FileFilterUtils.prefixFileFilter("fwkSuivi_pres.txt"),
+                        FileFilterUtils.directoryFileFilter() );
+
+        List<String> nlines = new ArrayList<String>();
+        //Ajout du HEADER CSV
+        nlines.add("Timestamp;Application Server;Num CR;User;SessionSag; CorrelationId; VNC;");
+        StringBuilder newLine = new StringBuilder();
+
+        for(File file : files){
+
+            if(file.getName().length() == 23) {
+                // Cool fichier de log par caisse
+                System.out.println(" Find log file :" + file.getAbsolutePath());
+                String numcr = file.getName().substring(18,23);
+
+                String appServer = file.getParentFile().getName().replaceAll("\\d","#");
+
+                List<String> lines = FileUtils.readLines(file);
+                for (String line : lines) {
+                    if(line.contains(";CONTEXTE r")){
+                        //Timestamp
+                        newLine = new StringBuilder(line.substring(0,19).replaceAll(Application.CSV_SEP,"T").replaceAll("/","-")).append(Application.CSV_SEP);
+                        //AS et NUMCR
+                        newLine.append(appServer).append(Application.CSV_SEP).append(numcr).append(Application.CSV_SEP);
+                    }else{
+                        newLine.append(line.replaceAll(Application.CSV_SEP," ").replaceAll("  "," "));
+                    }
+                    if(line.contains("</VUENATIONALECONTEXTE>")){
+                        nlines.add(newLine.toString());
+                    }
+                }
+
+            }
+
+
+
+
+
+        }
+        File fSaved = FileUtils.getFile("C:\\PTOD\\temp\\logs\\prod", "STATS-SesameWeb-production.csv");
+        FileUtils.writeLines(fSaved, nlines);
+        System.out.println(
+                "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
+                        + " lines ");
+
+    }
+
 
 
     /**
