@@ -284,6 +284,7 @@ public class ApplicationTest{
 
                 StringBuilder csvLine = null;
                 StringBuilder strCtxB = null;
+                StringBuilder strParamsB = null;
                 List<String> lines = FileUtils.readLines(file);
                 for (String line : lines) {
 
