@@ -26,7 +26,7 @@ public class Application{
     static final String CSV_SEP = ";";
 
 
-    static final SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm:ss.SSS");
+    static final SimpleDateFormat dateFormat = new SimpleDateFormat("YYYY-MM-dd HH:mm:ss,SSS");
 
     static final SimpleDateFormat dayLogsFormat = new SimpleDateFormat("YYYYMMdd");
 
@@ -434,8 +434,8 @@ public class Application{
     Date matchDateLine(final String lineLogback) {
         Date dResult = null;
         try{
-            if(lineLogback.length() > 15){
-                String timeLine = lineLogback.substring(0, 13);
+            if(lineLogback.length() > 22){
+                String timeLine = lineLogback.substring(0, 23);
                 if(StringUtils.isNotBlank(timeLine)){
                     dResult = dateFormat.parse(timeLine);
                 }
