@@ -91,14 +91,11 @@ public class ApplicationTest{
 
         List<String> nlines = new ArrayList<String>();
         //Ajout du HEADER CSV
-        nlines.add("Timestamp;Reseau Distrb.;Num CR;User;CorrelationId;produit");
+        nlines.add("Timestamp;Heure;Reseau Distrb.;Num CR;User;CorrelationId;produit");
 
         for(File file : files){
             System.out.println(" Find log file :" + file.getAbsolutePath());
 
-            int dateStarted = file.getName().indexOf("newsesame-back-web-") + 19 ;
-            String date = file.getName().substring(dateStarted,dateStarted + 8 );
-            String reseau = file.getName().substring(dateStarted - 19 -6 , dateStarted - 19 -4);
 
             List<String> lines = FileUtils.readLines(file);
             for(String line : lines){
@@ -109,9 +106,11 @@ public class ApplicationTest{
                         System.out.println(" WARN log line contain 4 ' - ' ");
                     }
                     StringBuilder csvLine = new StringBuilder();
-                    csvLine.append(date).append("-").append(ttab[0].substring(0,12)).append(Application.CSV_SEP);
-                    csvLine.append(reseau).append(Application.CSV_SEP);
-                    csvLine.append(ttab[0].substring(ttab[0].length() -5 )).append(Application.CSV_SEP);
+                    csvLine.append(ttab[0].substring(0,10)).append(Application.CSV_SEP);
+                    csvLine.append(ttab[0].substring(11,17)).append(Application.CSV_SEP);
+                    String numCr = ttab[0].substring(ttab[0].length() -5 );
+                    csvLine.append(numCr.equals("20000") ? "LCL" : "CRCA").append(Application.CSV_SEP);
+                    csvLine.append(numCr).append(Application.CSV_SEP);
                     csvLine.append(ttab[1]).append(Application.CSV_SEP);
                     csvLine.append(ttab[2]).append(Application.CSV_SEP);
                     csvLine.append(ttab[3].substring(10,12));
@@ -217,6 +216,94 @@ public class ApplicationTest{
                 + " lines ");
     }
 
+    @Test public void extractTranscoInseeFonction() throws IOException{
+
+        Collection<File>
+            files =
+            FileUtils.listFiles(new File("C:\\PTOD\\temp\\logs\\prod"), FileFilterUtils.suffixFileFilter("filter-TRANSCO-INSEE.txt"),
+                FileFilterUtils.directoryFileFilter());
+
+        List<String> nlines = new ArrayList<String>();
+        //Ajout du HEADER CSV
+        nlines.add("Date;Heure;Reseau Distrb.;Num CR;User;CorrelationId;Fonction");
+
+        for(File file : files){
+            System.out.println(" Find log file :" + file.getAbsolutePath());
+
+            List<String> lines = FileUtils.readLines(file, "UTF-8" );
+            for(String line : lines){
+                //OUPS c'est le flux SIMM :
+
+                String[] ttab = line.split(" - ");
+                if(ttab.length > 4  ){
+                    System.out.println(" WARN log line contain 4 ' - ' ");
+                }
+                StringBuilder csvLine = new StringBuilder();
+                csvLine.append(ttab[0].substring(0,10)).append(Application.CSV_SEP);
+                csvLine.append(ttab[0].substring(11,17)).append(Application.CSV_SEP);
+                String numCr = ttab[0].substring(ttab[0].length() -5 );
+                csvLine.append(numCr.equals("20000") ? "LCL" : "CRCA").append(Application.CSV_SEP);
+                csvLine.append(numCr).append(Application.CSV_SEP);
+                csvLine.append(ttab[1]).append(Application.CSV_SEP);
+                csvLine.append(ttab[2]).append(Application.CSV_SEP);
+                String message = ttab[3].split("\\(")[0];
+                csvLine.append(message);
+                nlines.add(csvLine.toString());
+
+
+            }
+        }
+        File fSaved = FileUtils.getFile("C:\\PTOD\\temp\\logs\\prod", "STATS-TRANSCO-INSEE-NS-production.csv");
+        FileUtils.writeLines(fSaved, nlines);
+        System.out.println(
+            "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
+                + " lines ");
+    }
+
+    @Test public void extractErreursInseeFonction() throws IOException{
+
+        Collection<File>
+            files =
+            FileUtils.listFiles(new File("C:\\PTOD\\temp\\logs\\prod"), FileFilterUtils.suffixFileFilter("filter-WARN-INSEE.txt"),
+                FileFilterUtils.directoryFileFilter());
+
+        List<String> nlines = new ArrayList<String>();
+        //Ajout du HEADER CSV
+        nlines.add("Date;Heure;Reseau Distrb.;Num CR;User;CorrelationId;Fonction");
+
+        for(File file : files){
+            System.out.println(" Find log file :" + file.getAbsolutePath());
+
+            List<String> lines = FileUtils.readLines(file, "UTF-8" );
+            for(String line : lines){
+                //OUPS c'est le flux SIMM :
+
+                String[] ttab = line.split(" - ");
+                if(ttab.length > 4  ){
+                    System.out.println(" WARN log line contain 4 ' - ' ");
+                }
+                StringBuilder csvLine = new StringBuilder();
+                csvLine.append(ttab[0].substring(0,10)).append(Application.CSV_SEP);
+                csvLine.append(ttab[0].substring(11,17)).append(Application.CSV_SEP);
+                String numCr = ttab[0].substring(ttab[0].length() -5 );
+                csvLine.append(numCr.equals("20000") ? "LCL" : "CRCA").append(Application.CSV_SEP);
+                csvLine.append(numCr).append(Application.CSV_SEP);
+                csvLine.append(ttab[1]).append(Application.CSV_SEP);
+                csvLine.append(ttab[2]).append(Application.CSV_SEP);
+                String message = ttab[3];
+                csvLine.append(message);
+                nlines.add(csvLine.toString());
+
+
+            }
+        }
+        File fSaved = FileUtils.getFile("C:\\PTOD\\temp\\logs\\prod", "STATS-WARN-INSEE-NS-production.csv");
+        FileUtils.writeLines(fSaved, nlines);
+        System.out.println(
+            "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
+                + " lines ");
+    }
+
     @Test public void extractAiguilleurFonction() throws IOException{
 
         Collection<File>
@@ -226,16 +313,12 @@ public class ApplicationTest{
 
         List<String> nlines = new ArrayList<String>();
         //Ajout du HEADER CSV
-        nlines.add("Timestamp;Reseau Distrb.;Num CR;User;CorrelationId;AiguillageRule");
+        nlines.add("Date;Heure;Reseau Distrb.;Num CR;User;CorrelationId;AiguillageRule");
 
         for(File file : files){
             System.out.println(" Find log file :" + file.getAbsolutePath());
 
-            int dateStarted = file.getName().indexOf("newsesame-back-web-") + 19 ;
-            String date = file.getName().substring(dateStarted,dateStarted + 8 );
-            String reseau = file.getName().substring(dateStarted - 19 -6 , dateStarted - 19 -4);
-
-            List<String> lines = FileUtils.readLines(file);
+            List<String> lines = FileUtils.readLines(file, "UTF-8" );
             for(String line : lines){
                 //OUPS c'est le flux SIMM :
 
@@ -244,12 +327,14 @@ public class ApplicationTest{
                         System.out.println(" WARN log line contain 4 ' - ' ");
                     }
                     StringBuilder csvLine = new StringBuilder();
-                    csvLine.append(date).append("-").append(ttab[0].substring(0,12)).append(Application.CSV_SEP);
-                    csvLine.append(reseau).append(Application.CSV_SEP);
-                    csvLine.append(ttab[0].substring(ttab[0].length() -5 )).append(Application.CSV_SEP);
+                    csvLine.append(ttab[0].substring(0,10)).append(Application.CSV_SEP);
+                    csvLine.append(ttab[0].substring(11,17)).append(Application.CSV_SEP);
+                    String numCr = ttab[0].substring(ttab[0].length() -5 );
+                    csvLine.append(numCr.equals("20000") ? "LCL" : "CRCA").append(Application.CSV_SEP);
+                    csvLine.append(numCr).append(Application.CSV_SEP);
                     csvLine.append(ttab[1]).append(Application.CSV_SEP);
                     csvLine.append(ttab[2]).append(Application.CSV_SEP);
-                    csvLine.append(ttab[3].substring(0,74));
+                    csvLine.append(ttab[3].substring(0,74).replaceFirst("Non géré par new sesame,", "Lancement SesameWeb :"));
                     nlines.add(csvLine.toString());
 
 
