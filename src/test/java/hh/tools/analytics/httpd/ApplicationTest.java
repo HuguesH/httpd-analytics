@@ -2,14 +2,12 @@ package hh.tools.analytics.httpd;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.FileFilterUtils;
 import org.junit.Test;
+
 
 /**
  * Created by hugues.hivert on 01/07/2016.
@@ -78,6 +76,107 @@ public class ApplicationTest{
         System.out.println("Identification d'un total de users  :  " + String.valueOf(users.size()));
 
     }
+
+    /**
+     * Anomalie Production bascule SEA vers SIMM
+     */
+    @Test
+    public void extractStatsMartineEvent() throws  Exception{
+
+
+        Map<String,String> mUsersProfile = new HashMap<String,String>();
+        List<StatsLcl> lStats = new ArrayList<StatsLcl>();
+        lStats.add(StatsLcl.getStatEntete());
+
+        extratStatsMartineNNIEvents(mUsersProfile, lStats);
+
+        extractFonctionnalMartineEvent("creation-devis",mUsersProfile,lStats);
+        extractFonctionnalMartineEvent("creation-propositions",mUsersProfile,lStats);
+        extractFonctionnalMartineEvent("creation-contrats",mUsersProfile,lStats);
+        extractFonctionnalMartineEvent("modification-contrats",mUsersProfile,lStats);
+
+
+        File fSaved = FileUtils.getFile("C:\\PTOD\\temp\\logs\\prod", "STATS-LCL-NS-production.csv");
+        FileUtils.writeLines(fSaved, lStats);
+        System.out.println(
+                "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(lStats.size())
+                        + " lines ");
+    }
+
+    private void extratStatsMartineNNIEvents(Map<String, String> mUsersProfile, List<StatsLcl> lStats) throws IOException {
+        Collection<File>
+                files =
+                FileUtils.listFiles(new File("C:\\PTOD\\temp\\logs\\prod"), FileFilterUtils.suffixFileFilter("NNI-lcl.txt"),
+                        FileFilterUtils.directoryFileFilter());
+        for(File file : files) {
+            System.out.println(" Find log file :" + file.getAbsolutePath());
+            List<String> lines = FileUtils.readLines(file);
+            String beforeLine = "";
+            for(String line : lines){
+                if (line.startsWith("<ns2:CONTEXT")){
+                    StatsLcl statsLcl = new StatsLcl();
+                    statsLcl.profile = Application.extractXmlAttributeValueFrom(line,"userProfile",3);
+                    statsLcl.user = Application.extractXmlAttributeValueFrom(line,"userId",6);
+                    statsLcl.correlationId = Application.extractXmlAttributeValueFrom(line,"correlationId",77).substring(41);
+                    statsLcl.numcr = Application.extractXmlAttributeValueFrom(line,"NUMCRT",5);
+                    statsLcl.action= " lancement NNI";
+                    statsLcl.log= "/lcl : 200";
+                    if(beforeLine.length() > 155) {
+                        statsLcl.timestamp = beforeLine.substring(0, 24);
+                        String[] ttab = beforeLine.split(" - ");
+                        if(ttab.length > 4  ){
+                            System.out.println(" WARN log line contain 4 ' - ' ");
+                        }
+                        statsLcl.correlationId = ttab[2];
+                        if(!statsLcl.user.equalsIgnoreCase(ttab[1])){
+                            System.out.println(" WARN log before is bad User ");
+                        }
+
+                    }
+                    lStats.add(statsLcl);
+                    mUsersProfile.put(statsLcl.user,statsLcl.profile );
+                }else{
+                    beforeLine = line;
+                }
+            }
+        }
+    }
+
+    public void extractFonctionnalMartineEvent(String event,Map<String, String> mUsersProfile, List<StatsLcl> lStats) throws  Exception{
+        Collection<File>
+                files =
+                FileUtils.listFiles(new File("C:\\PTOD\\temp\\logs\\prod"), FileFilterUtils.suffixFileFilter(event + ".txt"),
+                        FileFilterUtils.directoryFileFilter());
+
+
+        for(File file : files){
+            System.out.println(" Find log file :" + file.getAbsolutePath());
+
+            List<String> lines = FileUtils.readLines(file);
+            for(String line : lines){
+                    StatsLcl statsLcl = new StatsLcl();
+                    statsLcl.timestamp = line.substring(0,24);
+                    String[] ttab = line.split(" - ");
+                    if(ttab.length > 4  ){
+                        System.out.println(" WARN log line contain 4 ' - ' ");
+                    }
+                    statsLcl.numcr = ttab[0].substring(ttab[0].length() -5) ;
+                    statsLcl.user = ttab[1];
+                    statsLcl.correlationId = ttab[2];
+                    if(mUsersProfile.get(statsLcl.user) != null){
+                        statsLcl.profile = mUsersProfile.get(statsLcl.user);
+                        statsLcl.action = event;
+                        statsLcl.log = ttab[3].split("\\|")[0].replaceFirst("\\d{10,40}", "#####");
+                        lStats.add(statsLcl);
+                    }else {
+                        if(statsLcl.numcr.equalsIgnoreCase("20000")){
+                            System.out.println(" WARN log line Not Found User ");
+                        }
+                    }
+            }
+        }
+    }
+
 
     /**
      * Anomalie Production bascule SEA vers SIMM
