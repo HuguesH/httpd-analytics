@@ -26,9 +26,12 @@ public class Application{
     static final String CSV_SEP = ";";
 
 
-    static final SimpleDateFormat dateFormat = new SimpleDateFormat("YYYY-MM-dd HH:mm:ss,SSS");
+    // 2017-03-28 17:33:17,867
+    static final String completeDateFormat = "yyyy-MM-dd' 'HH:mm:ss,SSS";
+    static final String isoDateFormat = "yyyy-MM-dd'T'HH:mm:ss,SSS";
+    public final SimpleDateFormat dateFormat = new SimpleDateFormat(completeDateFormat);
 
-    static final SimpleDateFormat dayLogsFormat = new SimpleDateFormat("YYYYMMdd");
+    public final SimpleDateFormat dayLogsFormat = new SimpleDateFormat("yyyyMMdd");
 
     String appEnvrionnementFileName;
 
@@ -89,6 +92,9 @@ public class Application{
             // parse the command line arguments
             CommandLineParser parser = new DefaultParser();
             CommandLine line = parser.parse(options, args);
+
+            System.out.println(new SimpleDateFormat(completeDateFormat).format(new Date()) + " Starting Job with args : " + args);
+
 
             // validate that block-size has been set
             if(line.hasOption("h")){
@@ -157,6 +163,8 @@ public class Application{
             if(line.hasOption("s")){
                 application.aggregateAllWithPrefix("aggrega-access-clean");
             }
+
+            System.out.println(new SimpleDateFormat(completeDateFormat).format(new Date()) + " End Job with");
 
         }catch(Exception e){
             System.out.println(" Exception " + e.getMessage());
@@ -317,17 +325,15 @@ public class Application{
      */
     void aggregateDayAccessLogHttpd() throws IOException {
 
-        File dayWorkDirectory = FileUtils.getFile(targetDir, dayDirName);
+        File dayWorkDirectory = FileUtils.getFile(targetDir, dayDirName );
 
         Collection<File>
             files =
             FileUtils.listFiles(dayWorkDirectory, FileFilterUtils.prefixFileFilter("access"),
                 FileFilterUtils.directoryFileFilter());
 
-        List<String> nlines = new ArrayList<String>();
-        String csvHeader = ArrayUtils.toString(columnsName);
-        nlines.add(csvHeader.replaceAll(",",";").substring(1,csvHeader.length() -1));
-
+        Map<String, List<String>> mapListLines = new HashMap<>();
+        
         for(File file : files){
             System.out.println(" Find access file  " + file.getAbsolutePath());
 
@@ -355,25 +361,49 @@ public class Application{
                     // fonctionnels.
                     strBuild.append(cleanUri(cLine[8])).append(CSV_SEP);
                     // Ajout type ressource Http
-                    strBuild.append(typeUri(cLine[8])).append(CSV_SEP);
+                    String type = typeUri(cLine[8]);
+                    strBuild.append(type).append(CSV_SEP);
                     // Ajout sous Type
                     strBuild.append(sousType(cLine)).append(CSV_SEP);
 
                     // Ajout de l'Heure par tranche de 10 Min pour controler les dans le courant d'une journée.
                     strBuild.append(cLine[1].substring(0, 4)).append("0").append(CSV_SEP);
 
-                    nlines.add(strBuild.toString());
+                    affectLineByType(mapListLines, type,strBuild.toString());
+
                 }
             }
 
         }
 
-        File fSaved = FileUtils.getFile(backupDir, appEnvrionnementFileName + "-" + "aggrega-access-clean-" + dayDirName + ".csv");
-        FileUtils.writeLines(fSaved, nlines);
-        System.out.println(
-            "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(nlines.size())
-                + " lines ");
+        for (String type: mapListLines.keySet()) {
+            File fSaved = FileUtils.getFile(backupDir, appEnvrionnementFileName + "-" + "aggrega-access-clean-"+ type + ".csv");
+            if(fSaved.exists()){
+                mapListLines.get(type).remove(0);
+            }
+            FileUtils.writeLines(fSaved, mapListLines.get(type), true);
+            System.out.println(
+                    "Ecriture du fichier aggrege " + fSaved.getCanonicalPath() + " : " + String.valueOf(mapListLines.get(type).size())
+                            + " lines ");
+        }
 
+    }
+
+    private void affectLineByType(Map<String, List<String>> map, String type, String s) {
+        if(map.containsKey(type)){
+            map.get(type).add(s);
+        }else{
+            List newLines = getNewLinesByType();
+            newLines.add(s);
+            map.put(type,newLines);
+        }
+    }
+
+    private List<String> getNewLinesByType() {
+        List<String> nlines = new ArrayList<String>();
+        String csvHeader = ArrayUtils.toString(columnsName);
+        nlines.add(csvHeader.replaceAll(",",";").substring(1,csvHeader.length() -1));
+        return nlines;
     }
 
     private String sousType(String[] cLine) {
@@ -413,16 +443,28 @@ public class Application{
     }
 
     private String typeUri(String uri) {
+
         String[] uriDirs = uri.split("/");
-        StringBuilder typeB = new StringBuilder();
+        String type = "undefined";
         if(uriDirs.length > 1){
-            String type = uriDirs[1];
+            type = uriDirs[1];
             if("newsesame-adsu".equalsIgnoreCase(type)){
-                type = "newsesame-back-web";
+                type = "lancement";
             }
-            typeB.append(type).append("/");
+            if("newsesame-back-web".equalsIgnoreCase(type) && "lcl".equalsIgnoreCase( uriDirs[2])){
+                if(uri.contains("StockageEditique_LCL")){
+                    type = "bug-lcl";
+                }else{
+                    type = "lancement";
+                }
+
+            }
+            if(type.equalsIgnoreCase("StockageEditique_LCL")) {
+                type = "StockageEditique";
+            }
+
         }
-        return typeB.toString();
+        return type;
     }
 
     /**
@@ -432,6 +474,7 @@ public class Application{
      * @return
      */
     Date matchDateLine(final String lineLogback) {
+        SimpleDateFormat dateFormat = new SimpleDateFormat(completeDateFormat);
         Date dResult = null;
         try{
             if(lineLogback.length() > 22){
@@ -441,7 +484,7 @@ public class Application{
                 }
             }
         }catch(ParseException e){
-            // Not a patern with date, a stack trace or a file
+            // Not a patern with date, a stack trace, a file or a formated element.
         }
         return dResult;
 
@@ -591,7 +634,7 @@ public class Application{
                 if(endLIne == null){
                     System.out.println("Aucun element de fin pour la clés d'entrée : " + key);
                 }else {
-
+                    SimpleDateFormat dateFormat = new SimpleDateFormat(completeDateFormat);
                     Long diffBetween = endLIne._dateTime.getTime() - deltaLine._startLineLog._dateTime.getTime();
                     lineBuilder.append(key)
                         .append(";")
@@ -721,7 +764,7 @@ public class Application{
         System.out.println(" Find newsesame log file  " + file.getAbsolutePath());
         List<String> lines = FileUtils.readLines(file);
 
-        String dateIso = this.dayDirName.subSequence(0,3) + "-" + this.dayDirName.subSequence(4,5) + "-" + this.dayDirName.subSequence(5,6);
+        //String dateIso = this.dayDirName.subSequence(0,3) + "-" + this.dayDirName.subSequence(4,5) + "-" + this.dayDirName.subSequence(5,6);
 
         Date preTime = null;
         boolean goodLine = true;
@@ -752,7 +795,7 @@ public class Application{
                     dateLine = preTime;
                 }
                 if(goodLine){
-                    nlines.add(new LineLog(dateIso,dateLine, line, file.getParentFile().getName()));
+                    nlines.add(new LineLog(dateLine, line, file.getParentFile().getName()));
 
                 }
             }
@@ -801,7 +844,7 @@ public class Application{
                     dateLine = preTime;
                 }
                 if(goodLine){
-                    nlines.add(new LineLog(this.dayDirName,dateLine, line, file.getParentFile().getName()));
+                    nlines.add(new LineLog(dateLine, line, file.getParentFile().getName()));
 
                 }
             }
@@ -826,7 +869,7 @@ public class Application{
 
             String finaxyLine = bLine.toString();
             if(finaxyLine.length() > 7){
-                nlines.add(new LineLog(this.dayDirName,new Date(), finaxyLine, file.getParentFile().getName()));
+                nlines.add(new LineLog(new Date(), finaxyLine, file.getParentFile().getName()));
             }
 
         }
@@ -935,16 +978,12 @@ public class Application{
      */
     class LineLog implements Comparable<LineLog>{
 
-        LineLog(String dateDay, Date dateTime, String line, String folder) {
-
-            _dayTime = dateDay;
+        LineLog(Date dateTime, String line, String folder) {
             _dateTime = dateTime;
             _line = line;
             _folder = folder;
-
         }
 
-        String _dayTime;
         Date   _dateTime;
         String _line;
         String _folder;
@@ -953,7 +992,10 @@ public class Application{
          * @return string CSV with ';' separator
          */
         public String toString() {
-            return _dayTime+ "T"+ _line.replaceAll(";", "|") + ";" + dateFormat.format(_dateTime) + ";" + _folder;
+            SimpleDateFormat dateFormat = new SimpleDateFormat(isoDateFormat);
+            StringBuffer writer = new StringBuffer();
+            writer.append(_line.replaceAll(";", "|")).append(CSV_SEP).append(_folder);
+            return writer.toString();
         }
 
         public int compareTo(LineLog o) {
